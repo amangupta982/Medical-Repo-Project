@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+venv/
+node_modules/
+.env
+*.log
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
