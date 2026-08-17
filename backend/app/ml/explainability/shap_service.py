@@ -53,12 +53,15 @@ def _load_champion_model():
     if row is None:
         raise RuntimeError("No champion stock-out model found. Run train_stockout.py first.")
 
+    import os
     if row.model_name == "xgboost":
         model = xgb.XGBClassifier()
-        model.load_model(row.model_artifact_path)
+        local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "models", "trained", os.path.basename(row.model_artifact_path))
+        model.load_model(local_path)
         return model, "xgboost"
     elif row.model_name == "lightgbm":
-        booster = lgb.Booster(model_file=row.model_artifact_path)
+        local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "models", "trained", os.path.basename(row.model_artifact_path))
+        booster = lgb.Booster(model_file=local_path)
         return booster, "lightgbm"
     else:
         raise RuntimeError(f"Champion model '{row.model_name}' has no SHAP loader configured.")
