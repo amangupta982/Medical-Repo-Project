@@ -31,11 +31,7 @@ export default function DistrictResilience() {
   if (loading) return <LoadingSkeleton type="stats" />
 
   return (
-    <div>
-      <div className="page-header">
-        <h2>District Resilience Score</h2>
-        <div className="page-subtitle">Composite 0–100 index across medicine, beds, staffing, and emergency readiness</div>
-      </div>
+    <div className="dashboard-content">
 
       <div className="grid grid-2">
         <div className="card">

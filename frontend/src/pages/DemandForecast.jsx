@@ -30,11 +30,7 @@ export default function DemandForecast() {
   }
 
   return (
-    <div>
-      <div className="page-header">
-        <h2>Demand Forecasting</h2>
-        <div className="page-subtitle">Multi-horizon medicine demand prediction — XGBoost vs LightGBM vs LSTM</div>
-      </div>
+    <div className="dashboard-content">
 
       <div className="card card-accent">
         <h2>Run Forecast</h2>
