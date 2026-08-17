@@ -25,10 +25,14 @@ def _load_champion_stockout_model(db: Session):
     ).first()
     if row is None:
         raise HTTPException(status_code=503, detail="No trained stock-out model available.")
+    import os
     if row.model_name == "xgboost":
-        m = xgb.XGBClassifier(); m.load_model(row.model_artifact_path)
+        m = xgb.XGBClassifier()
+        local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(row.model_artifact_path))
+        m.load_model(local_path)
         return m, "xgboost"
-    booster = lgb.Booster(model_file=row.model_artifact_path)
+    local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(row.model_artifact_path))
+    booster = lgb.Booster(model_file=local_path)
     return booster, "lightgbm"
 
 
