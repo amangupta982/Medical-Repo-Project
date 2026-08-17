@@ -30,11 +30,7 @@ export default function FederatedLearning() {
   })) : []
 
   return (
-    <div>
-      <div className="page-header">
-        <h2>Cross-Border Federated Learning</h2>
-        <div className="page-subtitle">5 BRICS national clients — Flower FedAvg, raw data never leaves each client</div>
-      </div>
+    <div className="dashboard-content">
 
       <div className="card card-accent">
         {/* Client Cards */}

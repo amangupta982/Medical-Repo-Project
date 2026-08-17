@@ -21,11 +21,7 @@ export default function Alerts() {
   if (loading) return <LoadingSkeleton type="table" />
 
   return (
-    <div>
-      <div className="page-header">
-        <h2>System Alerts</h2>
-        <div className="page-subtitle">{alerts.length} total alerts from predictions and simulations</div>
-      </div>
+    <div className="dashboard-content">
 
       <div className="pill-group" style={{ marginBottom: 16 }}>
         {['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(level => (

@@ -35,12 +35,7 @@ export default function StockoutRisk() {
   }
 
   return (
-    <div>
-      <div className="page-header">
-        <h2>Stock-out Risk Prediction</h2>
-        <div className="page-subtitle">7-day advance warning — XGBoost vs LightGBM with SHAP explanations</div>
-      </div>
-
+    <div className="dashboard-content">
       <div className="card card-accent">
         <h2>Run Prediction</h2>
         <div className="form-group">

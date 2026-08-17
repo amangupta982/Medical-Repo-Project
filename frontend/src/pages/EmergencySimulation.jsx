@@ -38,11 +38,7 @@ export default function EmergencySimulation() {
   ] : []
 
   return (
-    <div>
-      <div className="page-header">
-        <h2>Emergency / What-If Simulation</h2>
-        <div className="page-subtitle">Stress-test the current model against outbreak and supply-chain scenarios</div>
-      </div>
+    <div className="dashboard-content">
 
       <div className="card card-accent">
         <h2>Select Scenario</h2>

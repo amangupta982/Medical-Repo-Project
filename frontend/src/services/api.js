@@ -10,6 +10,7 @@ export const api = {
   getInventory: (params) => client.get('/api/inventory', { params }).then(r => r.data),
   getAlerts: () => client.get('/api/alerts').then(r => r.data),
 
+  checkHealth: () => client.get('/health', { timeout: 4000 }).then(r => r.data),
   predictDemand: (payload) => client.post('/api/predict/demand', payload).then(r => r.data),
   predictStockout: (payload) => client.post('/api/predict/stockout', payload).then(r => r.data),
 

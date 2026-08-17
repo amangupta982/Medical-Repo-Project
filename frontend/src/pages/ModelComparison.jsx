@@ -19,11 +19,7 @@ export default function ModelComparison() {
   if (loading) return <LoadingSkeleton type="table" />
 
   return (
-    <div>
-      <div className="page-header">
-        <h2>Model Performance — Full Comparison</h2>
-        <div className="page-subtitle">Evidence-based model selection with time-based validation metrics</div>
-      </div>
+    <div className="dashboard-content">
 
       {tasks.map(task => {
         const taskRows = rows.filter(r => r.task === task)
