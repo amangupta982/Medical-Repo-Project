@@ -59,10 +59,13 @@ def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
         elif pr.model_name == "logistic_regression":
             continue  # secondary baseline, not served live (kept for the comparison table only)
         elif pr.model_name == "xgboost":
-            m = xgb.XGBClassifier(); m.load_model(pr.model_artifact_path)
+            m = xgb.XGBClassifier()
+            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(pr.model_artifact_path))
+            m.load_model(local_path)
             prob = float(m.predict_proba(X)[:, 1][0])
         elif pr.model_name == "lightgbm":
-            booster = lgb.Booster(model_file=pr.model_artifact_path)
+            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(pr.model_artifact_path))
+            booster = lgb.Booster(model_file=local_path)
             prob = float(booster.predict(X)[0])
         else:
             continue
@@ -124,10 +127,13 @@ def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 
         if pr.model_name in ("naive_lag1", "moving_average_7d"):
             pred = float(row["consumption_lag1"]) if pr.model_name == "naive_lag1" else float(row["consumption_ma7"])
         elif pr.model_name == "xgboost":
-            m = xgb.XGBRegressor(); m.load_model(pr.model_artifact_path)
+            m = xgb.XGBRegressor()
+            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(pr.model_artifact_path))
+            m.load_model(local_path)
             pred = float(max(0, m.predict(X)[0]))
         elif pr.model_name == "lightgbm":
-            booster = lgb.Booster(model_file=pr.model_artifact_path)
+            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(pr.model_artifact_path))
+            booster = lgb.Booster(model_file=local_path)
             pred = float(max(0, booster.predict(X)[0]))
         elif pr.model_name == "lstm":
             # LSTM needs the 14-day sequence; skipped in the lightweight live-inference
