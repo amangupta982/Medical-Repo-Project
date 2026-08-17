@@ -68,7 +68,7 @@ def explain_row(feature_row: pd.Series, top_k: int = 5) -> dict:
     """feature_row must contain all FEATURE_COLS. Returns top_k drivers with
     plain-language names and their SHAP contribution (positive = increases risk)."""
     model, model_type = _load_champion_model()
-    X = feature_row[FEATURE_COLS].to_frame().T
+    X = pd.DataFrame([[float(feature_row[c]) for c in FEATURE_COLS]], columns=FEATURE_COLS)
 
     if model_type == "xgboost":
         explainer = shap.TreeExplainer(model)

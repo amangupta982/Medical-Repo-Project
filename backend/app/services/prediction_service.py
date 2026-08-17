@@ -45,7 +45,7 @@ def _get_feature_row(phc_id: str, medicine: str):
 
 def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
     row, _ = _get_feature_row(phc_id, medicine)
-    X = row[FEATURE_COLS].to_frame().T.astype(float)
+    X = pd.DataFrame([[float(row[c]) for c in FEATURE_COLS]], columns=FEATURE_COLS)
 
     perf_rows = db.query(ModelPerformance).filter(ModelPerformance.task == "stockout_classification").all()
     if not perf_rows:
@@ -111,7 +111,7 @@ def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
 
 def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 1) -> dict:
     row, _ = _get_feature_row(phc_id, medicine)
-    X = row[FEATURE_COLS].to_frame().T.astype(float)
+    X = pd.DataFrame([[float(row[c]) for c in FEATURE_COLS]], columns=FEATURE_COLS)
 
     perf_rows = db.query(ModelPerformance).filter(ModelPerformance.task == "demand_forecast_1d").all()
     if not perf_rows:

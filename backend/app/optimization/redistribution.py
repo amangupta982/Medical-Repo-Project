@@ -56,7 +56,7 @@ def _load_snapshot(medicine_name: str, risk_scores: dict, as_of_date=None) -> pd
         FROM medicine_consumption mc
         JOIN phcs p ON p.id = mc.phc_id
         JOIN medicines m ON m.id = mc.medicine_id
-        WHERE m.name = :med AND mc.date >= (SELECT MAX(date) FROM medicine_consumption) - INTERVAL '14 days'
+        WHERE m.name = :med
         GROUP BY p.code
     """)
     with engine.connect() as conn:
