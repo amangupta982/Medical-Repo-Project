@@ -33,7 +33,7 @@ def compute_resilience_scores(as_of_date=None) -> pd.DataFrame:
                bd.beds_occupied, p.total_beds,
                st.doctors_present, st.nurses_present,
                p.sanctioned_doctors, p.sanctioned_nurses,
-               COALESCE(dc.outbreak_active, false) AS outbreak_active
+               COALESCE(dc.outbreak_active, 0) AS outbreak_active
         FROM inventory inv
         JOIN phcs p ON p.id = inv.phc_id
         JOIN districts d ON d.id = p.district_id

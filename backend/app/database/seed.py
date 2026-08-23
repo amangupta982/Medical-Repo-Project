@@ -2,20 +2,28 @@
 Seeds the Postgres database with the national PHC network.
 
 DATA PROVENANCE (see docs/DATA_SOURCES.md for full citations):
-- District/PHC network scale: calibrated to India's Rural Health Statistics
-  (data.gov.in "District-Wise Availability Of Health Centres In India")
-- Disease seasonality curves (malaria/dengue peaking post-monsoon): calibrated
-  to published IDSP weekly surveillance analysis (Indian J. Community Medicine,
-  2024) showing 63-80% of malaria outbreaks occurring in H2 of the year.
-- Bed occupancy volatility ranges: calibrated to published hospital bed
-  occupancy forecasting studies (BMC Med Inform Decis Mak 2026; Sci Rep 2025).
+- District/PHC network scale: calibrated to India's Rural Health Statistics (RHS)
+  and Census 2011 (data/raw/india_health_centres_district.csv).
+- Disease seasonality curves: calibrated to EpiClim: India's Epidemic-Climate Dataset
+  (Kaur et al. 2025, Zenodo DOI: 10.5281/zenodo.14580510) and IDSP analysis
+  (data/raw/idsp_seasonal_reference.json).
+- Bed occupancy volatility & supply chain lead-times: calibrated to published hospital
+  studies and NHM operational parameters (data/raw/idsp_seasonal_reference.json).
 - PHC-level DAILY medicine stock / footfall / staff attendance: no public
   dataset exists at this granularity -> THIS LAYER IS SYNTHETIC, generated
   from the real-world distributions above. This is explicitly documented,
   not claimed as real data.
 """
 import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import json
+import csv
+
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+root_dir = os.path.dirname(backend_dir)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 import numpy as np
 from datetime import datetime, timedelta, date
@@ -45,12 +53,56 @@ MEDICINES = [
 N_DAYS = 730
 START_DATE = datetime(2024, 1, 1)
 
+# Default fallback calibration parameters
+SEASONAL_PARAMS = {
+    "malaria_dengue": {"peak_doy": 194, "sigma_days": 60, "amplitude": 2.21},
+    "gi_outbreak": {"peak_doy": 174, "sigma_days": 60, "amplitude": 2.32},
+}
+SUPPLY_CHAIN_PARAMS = {
+    "standard_lead_time_mean": 5.0,
+    "remote_lead_time_mean": 11.0,
+    "standard_failure_rate": 0.04,
+    "remote_failure_rate": 0.10,
+}
+
+# Try loading from data/raw/idsp_seasonal_reference.json
+raw_json_path = os.path.join(root_dir, "data", "raw", "idsp_seasonal_reference.json")
+if os.path.exists(raw_json_path):
+    try:
+        with open(raw_json_path) as f:
+            ref_data = json.load(f)
+            md = ref_data.get("malaria_dengue_seasonality", {})
+            if md and "peak_doy" in md:
+                SEASONAL_PARAMS["malaria_dengue"] = {
+                    "peak_doy": md.get("peak_doy", 194),
+                    "sigma_days": md.get("sigma_days", 60),
+                    "amplitude": md.get("amplitude", 2.21),
+                }
+            gi = ref_data.get("gi_outbreak_seasonality", {})
+            if gi and "peak_doy" in gi:
+                SEASONAL_PARAMS["gi_outbreak"] = {
+                    "peak_doy": gi.get("peak_doy", 174),
+                    "sigma_days": gi.get("sigma_days", 60),
+                    "amplitude": gi.get("amplitude", 2.32),
+                }
+            sc = ref_data.get("supply_chain_parameters", {})
+            if sc:
+                SUPPLY_CHAIN_PARAMS["standard_lead_time_mean"] = sc.get("standard_phc_lead_time_days", {}).get("mean", 5.0)
+                SUPPLY_CHAIN_PARAMS["remote_lead_time_mean"] = sc.get("remote_phc_lead_time_days", {}).get("mean", 11.0)
+                SUPPLY_CHAIN_PARAMS["standard_failure_rate"] = sc.get("standard_supply_failure_rate", 0.04)
+                SUPPLY_CHAIN_PARAMS["remote_failure_rate"] = sc.get("remote_supply_failure_rate", 0.10)
+        print("Loaded calibration parameters from data/raw/idsp_seasonal_reference.json")
+    except Exception as e:
+        print(f"Warning: Failed to load {raw_json_path}: {e}. Using fallback defaults.")
+
 
 def seasonal_multiplier(day_of_year, kind):
-    if kind == "malaria_dengue":
-        return 1 + 1.8 * np.exp(-((day_of_year - 285) ** 2) / (2 * 35 ** 2))
-    if kind == "gi_outbreak":
-        return 1 + 1.2 * np.exp(-((day_of_year - 135) ** 2) / (2 * 30 ** 2))
+    p = SEASONAL_PARAMS.get(kind)
+    if p:
+        peak = p["peak_doy"]
+        sigma = p["sigma_days"]
+        amp = p["amplitude"]
+        return 1.0 + (amp - 1.0) * np.exp(-((day_of_year - peak) ** 2) / (2 * (sigma ** 2)))
     return 1.0
 
 
@@ -143,7 +195,8 @@ def main():
             pending = {m: [] for m in med_objs}
             reorder_point = {m: int(RNG.integers(60, 100)) for m in med_objs}
             avg_cons = {m: 1.0 for m in med_objs}
-            lead_time_mean = RNG.uniform(4, 6) if not phc.is_remote else RNG.uniform(8, 14)
+            lt_base = SUPPLY_CHAIN_PARAMS["remote_lead_time_mean"] if phc.is_remote else SUPPLY_CHAIN_PARAMS["standard_lead_time_mean"]
+            lead_time_mean = RNG.uniform(lt_base * 0.8, lt_base * 1.2)
 
             for day_idx, dt in enumerate(dates):
                 doy = dt.timetuple().tm_yday
@@ -193,7 +246,8 @@ def main():
 
                     if stock[mname] < reorder_point[mname] and not pending[mname]:
                         lt = max(1, int(round(RNG.normal(lead_time_mean, lead_time_mean * 0.3))))
-                        failure = RNG.random() < (0.10 if phc.is_remote else 0.04)
+                        failure_prob = SUPPLY_CHAIN_PARAMS["remote_failure_rate"] if phc.is_remote else SUPPLY_CHAIN_PARAMS["standard_failure_rate"]
+                        failure = RNG.random() < failure_prob
                         qty = int(max(80, avg_cons[mname] * RNG.uniform(18, 28) * d.capacity_factor))
                         delay = 0 if not failure else int(RNG.integers(5, 15))
                         pending[mname].append((day_idx + lt + delay, qty))
