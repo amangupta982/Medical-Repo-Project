@@ -46,10 +46,15 @@ export default function DemandForecast() {
     } finally { setLoading(false) }
   }
 
+<<<<<<< HEAD
+  return (
+    <div className="dashboard-content">
+=======
   const card = isDark ? 'bg-[#111a30] border border-blue-900/20' : 'bg-white border border-slate-200'
   const inputCls = isDark
     ? 'bg-[#0d1525] border border-blue-900/30 text-slate-200 focus:border-blue-500'
     : 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-blue-400'
+>>>>>>> origin/main
 
   // Build comparison chart data
   const compareData = HORIZONS.map(h => ({

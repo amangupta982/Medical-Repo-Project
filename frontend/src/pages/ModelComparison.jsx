@@ -69,6 +69,9 @@ export default function ModelComparison() {
   )
 
   return (
+<<<<<<< HEAD
+    <div className="dashboard-content">
+=======
     <div className="space-y-5">
       {/* Task tabs */}
       <div className="flex gap-2 flex-wrap">
@@ -85,6 +88,7 @@ export default function ModelComparison() {
           </button>
         ))}
       </div>
+>>>>>>> origin/main
 
       {/* Champion callout */}
       {champion && (

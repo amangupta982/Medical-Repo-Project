@@ -45,6 +45,21 @@ export default function StockoutRisk() {
     } finally { setLoading(false) }
   }
 
+<<<<<<< HEAD
+  return (
+    <div className="dashboard-content">
+      <div className="card card-accent">
+        <h2>Run Prediction</h2>
+        <div className="form-group">
+          <select value={phcId} onChange={e => setPhcId(e.target.value)}>
+            {phcs.map(p => <option key={p.code} value={p.code}>{p.code} — {p.district}</option>)}
+          </select>
+          <select value={medicine} onChange={e => setMedicine(e.target.value)}>
+            {MEDICINES.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <button onClick={runPrediction} disabled={loading}>
+            {loading ? '⏳ Running models...' : '🔍 Predict Stock-out Risk'}
+=======
   const card = isDark ? 'bg-[#111a30] border border-blue-900/20' : 'bg-white border border-slate-200'
   const inputCls = isDark
     ? 'bg-[#0d1525] border border-blue-900/30 text-slate-200 focus:border-blue-500'
@@ -78,6 +93,7 @@ export default function StockoutRisk() {
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-lg shadow-blue-500/20">
             {loading ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
             {loading ? 'Analysing...' : 'Predict Risk'}
+>>>>>>> origin/main
           </button>
         </div>
       </motion.div>
