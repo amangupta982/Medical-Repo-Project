@@ -18,11 +18,7 @@ export default function ResourceRedistribution() {
   }
 
   return (
-    <div>
-      <div className="page-header">
-        <h2>Cross-District Resource Redistribution</h2>
-        <div className="page-subtitle">OR-Tools transportation LP with FEFO expiry prioritization</div>
-      </div>
+    <div className="dashboard-content">
 
       <div className="card card-accent">
         <div className="methodology" style={{ marginBottom: 14 }}>
