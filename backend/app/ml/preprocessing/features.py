@@ -41,12 +41,34 @@ def compute_stockout_labels(df: pd.DataFrame) -> pd.DataFrame:
     g = df.groupby(["phc_id", "medicine"])
     df["stock_out_flag"] = ((df["current_stock"] == 0) &
                              (df["daily_consumption"] >= 0)).astype(int)
-    # also flag where consumption look implausibly capped by low stock (approximation from DB view)
+    # also flag where consumption looks implausibly capped by low stock (approximation from DB view)
     df["stock_out_next_7d"] = (
         g["stock_out_flag"].apply(lambda s: s.shift(-1).rolling(7, min_periods=1).max().shift(-6))
         .reset_index(drop=True)
     )
     df["stock_out_next_7d"] = df["stock_out_next_7d"].fillna(0).astype(int)
+    return df
+
+def compute_demand_targets(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Computes causal forward-rolling demand targets for multiple horizons (1d, 7d, 14d, 30d).
+    For day t:
+    - 1d: daily consumption on day t (or next 1-day)
+    - 7d: cumulative consumption over days t ... t+6 (7-day forward sum, shifted with no leakage)
+    - 14d: cumulative consumption over days t ... t+13 (14-day forward sum)
+    - 30d: cumulative consumption over days t ... t+29 (30-day forward sum)
+    """
+    df = df.sort_values(["phc_id", "medicine", "date"]).copy()
+    g = df.groupby(["phc_id", "medicine"], group_keys=False)
+
+    df["demand_target_1d"] = df["daily_consumption"].astype(float)
+    
+    for h in [7, 14, 30]:
+        target_series = g["daily_consumption"].apply(
+            lambda s: s.rolling(h, min_periods=1).sum().shift(-(h - 1))
+        )
+        df[f"demand_target_{h}d"] = target_series.fillna(df["daily_consumption"] * h).astype(float)
+
     return df
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -82,6 +104,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df["outbreak_active"] = df["outbreak_active"].astype(int)
     df["is_remote"] = df["is_remote"].astype(int)
 
+    if "stock_out_flag" not in df.columns:
+        df["stock_out_flag"] = ((df["current_stock"] == 0) & (df["daily_consumption"] >= 0)).astype(int)
+
     peer = df.groupby(["district", "medicine", "date"])["stock_out_flag"].transform("mean")
     df["district_peer_stockout_rate"] = peer
 
@@ -102,3 +127,10 @@ FEATURE_COLS = [
 ]
 STOCKOUT_TARGET = "stock_out_next_7d"
 DEMAND_TARGET = "daily_consumption"
+DEMAND_HORIZONS = [1, 7, 14, 30]
+DEMAND_TARGET_MAP = {
+    1: "demand_target_1d",
+    7: "demand_target_7d",
+    14: "demand_target_14d",
+    30: "demand_target_30d",
+}

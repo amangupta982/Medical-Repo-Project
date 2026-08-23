@@ -9,13 +9,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "axios": "^1.7.7",
+    "clsx": "^2.1.1",
+    "framer-motion": "^13.1.1",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.33.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.2",
-    "axios": "^1.7.7",
-    "recharts": "^2.12.7",
+    "react-hot-toast": "^2.6.0",
     "react-leaflet": "^4.2.1",
-    "leaflet": "^1.9.4"
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.12.7",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

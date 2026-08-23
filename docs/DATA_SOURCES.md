@@ -10,22 +10,23 @@ the problem statement describes. Where a real dataset exists, we use it to
 
 | Purpose | Dataset | Source | License | How it's used |
 |---|---|---|---|---|
-| PHC/CHC network scale | District-Wise Availability of Health Centres in India | data.gov.in — Rural Health Statistics | Government Open Data License – India | Grounds the number of PHCs per district and catchment population ranges |
-| Disease seasonality | IDSP weekly vector-borne disease surveillance analysis (2020–2023) | Published secondary analysis, Indian Journal of Community Medicine | Academic / public | Calibrates the malaria/dengue seasonal curve — real analysis shows 63–80% of malaria outbreaks occur in H2 of the year (post-monsoon), which the synthetic seasonality curve mirrors |
-| Dengue case trends | "Dengue Cases in India" | Kaggle (jadhavpranav/dengue-cases-in-india) | Kaggle dataset terms | Calibrates outbreak magnitude/frequency assumptions |
+| PHC/CHC network scale | District-Wise Availability of Health Centres in India | Rural Health Statistics (MoHFW) / data.gov.in | Government Open Data License – India | Grounds the number of PHCs per district and catchment population ranges |
+| Disease seasonality & surveillance | EpiClim: India's Epidemic-Climate Dataset (2009–2023) | Kaur et al. 2025, Zenodo DOI: 10.5281/zenodo.14580510 | Open Access (Creative Commons Attribution 4.0) | Calibrates the malaria/dengue and GI outbreak seasonal curves, peak day-of-year, spread, and amplitude from district-level weekly surveillance |
+| Dengue case trends | "Dengue Cases in India" | NCVBDC annual reports / data.gov.in / EpiClim | Public / Open | Calibrates outbreak magnitude/frequency assumptions |
 | Bed occupancy dynamics | Hospital bed occupancy forecasting studies (incl. an Indian mental-health-hospital case study using Prophet/XGBoost) | BMC Medical Informatics and Decision Making; Scientific Reports | Open access | Validates realistic bed-occupancy volatility ranges used in the simulator |
 
 ### Actual data files
 
-The real calibration datasets are committed in `data/raw/`:
+The real calibration datasets are generated/downloaded into `data/raw/`:
 
 | File | Contents | See |
 |---|---|---|
-| `data/raw/india_health_centres_district.csv` | All 30 Karnataka districts — PHC/CHC/SC counts, population, area | `data/raw/README.md` |
-| `data/raw/dengue_cases_india.csv` | State-wise dengue cases & deaths, 2017–2023 (NCVBDC) | `data/raw/README.md` |
-| `data/raw/idsp_seasonal_reference.json` | Exact seasonal curves, bed-occupancy bounds, supply-chain params with citations | `data/raw/README.md` |
+| `data/raw/india_health_centres_district.csv` | 10 Karnataka districts — PHC/CHC/SC counts, population | `data/raw/download_datasets.py` |
+| `data/raw/epiclim_disease_surveillance.csv` | District-wise weekly disease surveillance records (EpiClim) | `data/raw/download_datasets.py` |
+| `data/raw/dengue_cases_india.csv` | State-wise dengue cases & deaths, 2017–2023 (NCVBDC) | `data/raw/download_datasets.py` |
+| `data/raw/idsp_seasonal_reference.json` | Exact seasonal curves, bed-occupancy bounds, supply-chain params with citations | `data/raw/download_datasets.py` |
 
-Run `python data/raw/download_datasets.py` to verify all files are present.
+Run `python data/raw/download_datasets.py` to download and generate all calibration files.
 
 ## Synthetic layer (clearly labeled, not claimed as real)
 

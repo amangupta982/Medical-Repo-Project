@@ -64,6 +64,35 @@ class TestStockoutLabeling:
         assert set(df["stock_out_flag"].unique()).issubset({0, 1})
 
 
+class TestDemandTargets:
+    def test_demand_targets_no_leakage_and_correct_sum(self):
+        from app.ml.preprocessing.features import compute_demand_targets
+        df = _tiny_panel()
+        res = compute_demand_targets(df)
+        
+        # Check all target columns exist
+        for h in [1, 7, 14, 30]:
+            col = f"demand_target_{h}d"
+            assert col in res.columns
+            assert res[col].isna().sum() == 0
+            assert (res[col] >= 0).all()
+
+        # Check 7-day sum at index 0 equals sum of first 7 days (index 0 to 6)
+        raw_cons = df.sort_values("date")["daily_consumption"].values
+        assert res["demand_target_7d"].iloc[0] == raw_cons[0:7].sum()
+        # Check 14-day sum at index 0 equals sum of first 14 days (index 0 to 13)
+        assert res["demand_target_14d"].iloc[0] == raw_cons[0:14].sum()
+
+    def test_demand_targets_monotonic_horizon_scale(self):
+        from app.ml.preprocessing.features import compute_demand_targets
+        df = _tiny_panel()
+        res = compute_demand_targets(df)
+        # Average cumulative consumption must grow with horizon
+        assert res["demand_target_1d"].mean() < res["demand_target_7d"].mean()
+        assert res["demand_target_7d"].mean() < res["demand_target_14d"].mean()
+        assert res["demand_target_14d"].mean() < res["demand_target_30d"].mean()
+
+
 class TestRiskLevelMapping:
     def test_risk_thresholds_monotonic(self):
         from app.services.prediction_service import risk_level_for
