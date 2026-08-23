@@ -116,43 +116,71 @@ def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 
     row, _ = _get_feature_row(phc_id, medicine)
     X = pd.DataFrame([[float(row[c]) for c in FEATURE_COLS]], columns=FEATURE_COLS)
 
-    perf_rows = db.query(ModelPerformance).filter(ModelPerformance.task == "demand_forecast_1d").all()
+    SUPPORTED_HORIZONS = [1, 7, 14, 30]
+    mapped_horizon = min(SUPPORTED_HORIZONS, key=lambda h: abs(h - horizon_days))
+    task_name = f"demand_forecast_{mapped_horizon}d"
+
+    perf_rows = db.query(ModelPerformance).filter(ModelPerformance.task == task_name).all()
+    if not perf_rows and mapped_horizon != 1:
+        # Fallback if specific horizon rows not yet populated
+        perf_rows = db.query(ModelPerformance).filter(ModelPerformance.task == "demand_forecast_1d").all()
+
     if not perf_rows:
-        raise RuntimeError("No trained demand models found. Run app/ml/forecasting/train_demand.py first.")
+        raise RuntimeError(f"No trained demand models found for task {task_name}. Run app/ml/forecasting/train_demand.py first.")
 
     all_outputs = []
     champion_row = None
     champion_pred = None
+    models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained"))
+
     for pr in perf_rows:
-        if pr.model_name in ("naive_lag1", "moving_average_7d"):
-            pred = float(row["consumption_lag1"]) if pr.model_name == "naive_lag1" else float(row["consumption_ma7"])
+        if pr.model_name == "naive_lag1":
+            pred = float(row["consumption_lag1"]) * mapped_horizon
+        elif pr.model_name == "moving_average_7d":
+            pred = float(row["consumption_ma7"]) * mapped_horizon
         elif pr.model_name == "xgboost":
             m = xgb.XGBRegressor()
-            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(pr.model_artifact_path))
+            artifact_file = os.path.basename(pr.model_artifact_path) if pr.model_artifact_path else f"xgb_demand_{mapped_horizon}d.json"
+            local_path = os.path.join(models_dir, artifact_file)
+            if not os.path.exists(local_path):
+                local_path = os.path.join(models_dir, "xgb_demand.json")
             m.load_model(local_path)
             pred = float(max(0, m.predict(X)[0]))
         elif pr.model_name == "lightgbm":
-            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(pr.model_artifact_path))
+            artifact_file = os.path.basename(pr.model_artifact_path) if pr.model_artifact_path else f"lgb_demand_{mapped_horizon}d.txt"
+            local_path = os.path.join(models_dir, artifact_file)
+            if not os.path.exists(local_path):
+                local_path = os.path.join(models_dir, "lgb_demand.txt")
             booster = lgb.Booster(model_file=local_path)
             pred = float(max(0, booster.predict(X)[0]))
         elif pr.model_name == "lstm":
-            # LSTM needs the 14-day sequence; skipped in the lightweight live-inference
-            # path unless the sequence builder is wired in -- metrics still shown for comparison.
+            # LSTM requires a 14-day sequential sliding window tensor reconstruction at request time.
+            # To preserve sub-50ms API responsiveness for interactive dashboards, LSTM is evaluated as
+            # an offline 1-day benchmark (train_demand_lstm.py) and excluded from live multi-horizon scoring.
             pred = None
         else:
             continue
-        all_outputs.append({"model": pr.model_name, "prediction": round(pred, 2) if pred is not None else None,
-                             "metrics": pr.metrics})
+
+        all_outputs.append({
+            "model": pr.model_name,
+            "prediction": round(pred, 2) if pred is not None else None,
+            "metrics": pr.metrics
+        })
         if pr.is_current_champion and pred is not None:
             champion_row, champion_pred = pr, pred
 
     if champion_row is None:
-        # fall back to best available model among those we could actually score live
+        # Fall back to lowest MAE among scored candidates
         scored = [o for o in all_outputs if o["prediction"] is not None]
         champion_row = min(perf_rows, key=lambda r: r.metrics.get("mae", 1e9))
         champion_pred = next((o["prediction"] for o in scored if o["model"] == champion_row.model_name), None)
 
-    final_pred = champion_pred * horizon_days if champion_pred is not None else None
+    # For exact supported horizons (1, 7, 14, 30), final_pred is directly the model output.
+    # For custom off-grid horizons, scale proportionally from the nearest modeled horizon.
+    if horizon_days == mapped_horizon:
+        final_pred = champion_pred
+    else:
+        final_pred = (champion_pred / mapped_horizon) * horizon_days if (champion_pred is not None and mapped_horizon > 0) else champion_pred
 
     pred_log = Prediction(
         prediction_type="demand",
@@ -169,10 +197,12 @@ def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 
     db.refresh(pred_log)
 
     return {
-        "phc_id": phc_id, "medicine": medicine, "horizon_days": horizon_days,
+        "phc_id": phc_id,
+        "medicine": medicine,
+        "horizon_days": horizon_days,
         "all_model_outputs": all_outputs,
         "selected_model": champion_row.model_name,
         "final_prediction": round(final_pred, 2) if final_pred is not None else None,
-        "selection_reason": f"{champion_row.model_name} selected: lowest MAE "
+        "selection_reason": f"{champion_row.model_name} selected for {task_name}: lowest MAE "
                              f"({champion_row.metrics.get('mae')}) on held-out time-based validation set.",
     }

@@ -84,10 +84,11 @@ pip install -r requirements.txt
 export DATABASE_URL="postgresql://postgres:brics_dev_pw@localhost:5432/brics_health"
 export PYTHONPATH="$(pwd)"
 
+python ../data/raw/download_datasets.py           # fetches real EpiClim & RHS calibration data
 python app/database/seed.py                       # creates schema + seeds ~350k rows (~1 min)
 python app/ml/classification/train_stockout.py     # trains baseline/XGBoost/LightGBM for stock-out
-python app/ml/forecasting/train_demand.py           # trains baseline/XGBoost/LightGBM for demand
-python app/ml/lstm/train_demand_lstm.py             # trains LSTM (slowest step, run separately)
+python app/ml/forecasting/train_demand.py           # trains multi-horizon XGBoost/LightGBM demand models
+python app/ml/lstm/train_demand_lstm.py             # trains LSTM sequence benchmark (slowest step)
 
 uvicorn app.main:app --reload --port 8000
 ```
