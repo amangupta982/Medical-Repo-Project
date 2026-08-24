@@ -7,5 +7,37 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  server: { port: 5173 },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react-router-dom',
+      'framer-motion',
+      'recharts',
+      'lucide-react',
+      'leaflet',
+      'react-leaflet',
+      'axios',
+      'react-hot-toast',
+      'clsx'
+    ],
+  },
+  server: {
+    port: 5173,
+    strictPort: false,
+    hmr: {
+      overlay: true,
+    },
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
+  },
 })

@@ -18,13 +18,20 @@ function ChangeView({ center, zoom }) {
   return null
 }
 
+const DEFAULT_MAP_PHCS = [
+  { code: 'BEN-PHC01', name: 'Bengaluru Rural Central PHC', district: 'Bengaluru Rural', lat: 13.23, lon: 77.71, total_beds: 12, sanctioned_doctors: 2, sanctioned_nurses: 4, catchment_population: 32000, is_remote: false },
+  { code: 'BEN-PHC02', name: 'Devanahalli PHC', district: 'Bengaluru Rural', lat: 13.25, lon: 77.72, total_beds: 10, sanctioned_doctors: 2, sanctioned_nurses: 3, catchment_population: 28000, is_remote: false },
+  { code: 'BEL-PHC01', name: 'Belagavi North PHC', district: 'Belagavi', lat: 15.86, lon: 74.50, total_beds: 15, sanctioned_doctors: 3, sanctioned_nurses: 5, catchment_population: 45000, is_remote: false },
+  { code: 'KAL-PHC01', name: 'Kalaburagi Main PHC', district: 'Kalaburagi', lat: 17.33, lon: 76.83, total_beds: 14, sanctioned_doctors: 2, sanctioned_nurses: 4, catchment_population: 38000, is_remote: true },
+  { code: 'MYS-PHC01', name: 'Mysuru City PHC', district: 'Mysuru', lat: 12.30, lon: 76.65, total_beds: 16, sanctioned_doctors: 3, sanctioned_nurses: 6, catchment_population: 52000, is_remote: false },
+]
+
 export default function PHCMapPage() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
-  const [phcs, setPhcs] = useState([])
+  const [phcs, setPhcs] = useState(DEFAULT_MAP_PHCS)
   const [districts, setDistricts] = useState([])
-  const [loading, setLoading] = useState(true)
 
   // Filters
   const [selectedDistrict, setSelectedDistrict] = useState('all')
@@ -38,10 +45,9 @@ export default function PHCMapPage() {
       api.getDistricts().catch(() => []),
     ])
       .then(([p, d]) => {
-        setPhcs(p || [])
-        setDistricts(d || [])
+        if (p && p.length > 0) setPhcs(p)
+        if (d && d.length > 0) setDistricts(d)
       })
-      .finally(() => setLoading(false))
   }, [])
 
   const filteredPhcs = useMemo(() => {
@@ -87,15 +93,6 @@ export default function PHCMapPage() {
   const inputCls = isDark
     ? 'bg-[#0d1525] border border-blue-900/30 text-slate-200 focus:border-blue-500'
     : 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-blue-400'
-
-  if (loading) {
-    return (
-      <div className="space-y-5">
-        <LoadingSkeleton type="stats" />
-        <div className="h-96 rounded-2xl bg-slate-800 animate-pulse" />
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-5">

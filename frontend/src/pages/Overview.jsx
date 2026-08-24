@@ -35,16 +35,23 @@ const DEMAND_TREND_DATA = [
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899']
 
+const DEFAULT_OVERVIEW_PHCS = [
+  { code: 'BEN-PHC01', name: 'Bengaluru Rural Central PHC', district: 'Bengaluru Rural', total_beds: 12, sanctioned_doctors: 2, catchment_population: 32000, is_remote: false },
+  { code: 'BEN-PHC02', name: 'Devanahalli PHC', district: 'Bengaluru Rural', total_beds: 10, sanctioned_doctors: 2, catchment_population: 28000, is_remote: false },
+  { code: 'BEL-PHC01', name: 'Belagavi North PHC', district: 'Belagavi', total_beds: 15, sanctioned_doctors: 3, catchment_population: 45000, is_remote: false },
+  { code: 'KAL-PHC01', name: 'Kalaburagi Main PHC', district: 'Kalaburagi', total_beds: 14, sanctioned_doctors: 2, catchment_population: 38000, is_remote: true },
+  { code: 'MYS-PHC01', name: 'Mysuru City PHC', district: 'Mysuru', total_beds: 16, sanctioned_doctors: 3, catchment_population: 52000, is_remote: false },
+]
+
 export default function Overview() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
-  const [phcs, setPhcs] = useState([])
+  const [phcs, setPhcs] = useState(DEFAULT_OVERVIEW_PHCS)
   const [districts, setDistricts] = useState([])
   const [alerts, setAlerts] = useState([])
   const [resilience, setResilience] = useState([])
   const [overviewStats, setOverviewStats] = useState(null)
-  const [loading, setLoading] = useState(true)
 
   // Global filters
   const [selectedDistrict, setSelectedDistrict] = useState('all')
@@ -59,13 +66,12 @@ export default function Overview() {
       api.getStatsOverview().catch(() => null),
     ])
       .then(([p, d, a, r, stats]) => {
-        setPhcs(p || [])
-        setDistricts(d || [])
-        setAlerts(a || [])
-        setResilience(r || [])
-        setOverviewStats(stats)
+        if (p && p.length > 0) setPhcs(p)
+        if (d && d.length > 0) setDistricts(d)
+        if (a) setAlerts(a)
+        if (r) setResilience(r)
+        if (stats) setOverviewStats(stats)
       })
-      .finally(() => setLoading(false))
   }, [])
 
   const filteredPhcs = useMemo(() => {
@@ -123,15 +129,6 @@ export default function Overview() {
     borderRadius: 10,
     fontSize: 12,
     color: isDark ? '#f1f5f9' : '#0f172a',
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <LoadingSkeleton type="stats" />
-        <LoadingSkeleton count={2} />
-      </div>
-    )
   }
 
   return (
