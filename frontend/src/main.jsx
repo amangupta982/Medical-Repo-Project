@@ -1,10 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-<<<<<<< HEAD
-=======
 import { Toaster } from 'react-hot-toast'
->>>>>>> origin/main
 import { ThemeProvider } from './components/ThemeContext.jsx'
 import App from './App.jsx'
 import './index.css'
@@ -14,8 +11,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <ThemeProvider>
         <App />
-<<<<<<< HEAD
-=======
         <Toaster
           position="top-right"
           toastOptions={{
@@ -31,7 +26,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
           }}
         />
->>>>>>> origin/main
       </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>

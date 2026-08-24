@@ -60,11 +60,13 @@ def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
             continue  # secondary baseline, not served live (kept for the comparison table only)
         elif pr.model_name == "xgboost":
             m = xgb.XGBClassifier()
-            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(pr.model_artifact_path))
+            artifact_name = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else "xgb_stockout.json"
+            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", artifact_name)
             m.load_model(local_path)
             prob = float(m.predict_proba(X)[:, 1][0])
         elif pr.model_name == "lightgbm":
-            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(pr.model_artifact_path))
+            artifact_name = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else "lgb_stockout.txt"
+            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", artifact_name)
             booster = lgb.Booster(model_file=local_path)
             prob = float(booster.predict(X)[0])
         else:
@@ -140,14 +142,14 @@ def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 
             pred = float(row["consumption_ma7"]) * mapped_horizon
         elif pr.model_name == "xgboost":
             m = xgb.XGBRegressor()
-            artifact_file = os.path.basename(pr.model_artifact_path) if pr.model_artifact_path else f"xgb_demand_{mapped_horizon}d.json"
+            artifact_file = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else f"xgb_demand_{mapped_horizon}d.json"
             local_path = os.path.join(models_dir, artifact_file)
             if not os.path.exists(local_path):
                 local_path = os.path.join(models_dir, "xgb_demand.json")
             m.load_model(local_path)
             pred = float(max(0, m.predict(X)[0]))
         elif pr.model_name == "lightgbm":
-            artifact_file = os.path.basename(pr.model_artifact_path) if pr.model_artifact_path else f"lgb_demand_{mapped_horizon}d.txt"
+            artifact_file = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else f"lgb_demand_{mapped_horizon}d.txt"
             local_path = os.path.join(models_dir, artifact_file)
             if not os.path.exists(local_path):
                 local_path = os.path.join(models_dir, "lgb_demand.txt")

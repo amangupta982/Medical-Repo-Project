@@ -1,209 +1,171 @@
-<<<<<<< HEAD
 import { useState } from 'react'
+import toast from 'react-hot-toast'
+import { motion } from 'framer-motion'
+import { RefreshCw, Package, Truck, ArrowRight, ShieldCheck, Clock, Loader2 } from 'lucide-react'
+import { useTheme } from '../components/ThemeContext.jsx'
 import api from '../services/api.js'
-import AnimatedCounter from '../components/AnimatedCounter.jsx'
+import KpiCard from '../components/KpiCard.jsx'
 
 export default function ResourceRedistribution() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
 
-  const run = async () => {
-    setLoading(true); setError(null); setResult(null)
+  const runOptimization = async () => {
+    setLoading(true)
+    setResult(null)
     try {
       const res = await api.optimizeRedistribution()
       setResult(res)
+      toast.success(`Plan optimized: ${res.total_transfer_orders} transfer orders calculated.`)
     } catch (e) {
-      setError(e?.response?.data?.detail || 'Optimization failed.')
-    } finally { setLoading(false) }
+      toast.error(e?.response?.data?.detail || 'Optimization failed. Check backend logs.')
+    } finally {
+      setLoading(false)
+    }
   }
 
+  const cardCls = isDark
+    ? 'bg-[#111a30] border border-blue-900/20 shadow-sm'
+    : 'bg-white border border-slate-200 shadow-sm'
+
   return (
-    <div className="dashboard-content">
+    <div className="space-y-5">
 
-      <div className="card card-accent">
-        <div className="methodology" style={{ marginBottom: 14 }}>
-          Solves a constrained optimization problem: minimize transport cost while prioritizing
-          high-risk recipients. Stock close to expiry (FEFO) gets shipped first to avoid wastage
-          at low-demand PHCs.
-        </div>
-        <button onClick={run} disabled={loading}>
-          {loading ? '⏳ Optimizing...' : '🔄 Generate Redistribution Plan'}
+      {/* ── Explanation & Trigger Card ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`rounded-2xl p-5 ${cardCls}`}
+      >
+        <h2 className={`text-sm font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-800'}`}>
+          Constrained Linear Programming Redistribution Engine
+        </h2>
+        <p className={`text-xs max-w-3xl mb-4 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+          Solves an OR-Tools transportation LP problem across district boundaries: minimizes inter-facility transport costs while prioritizing recipients facing highest stockout probabilities. Batches close to expiry (First-Expiry-First-Out) are prioritized for immediate dispatch to eliminate medicine wastage.
+        </p>
+
+        <button
+          onClick={runOptimization}
+          disabled={loading}
+          className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+        >
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+          {loading ? 'Optimizing cross-district routes...' : 'Generate Redistribution Plan'}
         </button>
-        {error && <p style={{ color: 'var(--critical)', marginTop: 12, fontSize: 13 }}>{error}</p>}
-      </div>
+      </motion.div>
 
+      {/* ── Optimization Results ── */}
       {result && (
-        <>
-          <div className="grid grid-3">
-            <div className="card stat">
-              <div className="value"><AnimatedCounter value={result.total_transfer_orders} /></div>
-              <div className="label">Transfer Orders</div>
-            </div>
-            <div className="card stat">
-              <div className="value"><AnimatedCounter value={result.total_units_redistributed} /></div>
-              <div className="label">Units Redistributed</div>
-            </div>
-            <div className="card stat">
-              <div className="value text-low"><AnimatedCounter value={result.at_risk_phcs_addressed} /></div>
-              <div className="label">At-Risk PHCs Addressed</div>
-            </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="space-y-5"
+        >
+          {/* Result KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <KpiCard
+              label="Transfer Orders"
+              value={result.total_transfer_orders}
+              unit="routes"
+              icon={Truck}
+              color="blue"
+              sub={`Computed as of ${result.as_of_date || 'Today'}`}
+              delay={0.05}
+            />
+            <KpiCard
+              label="Total Units Redistributed"
+              value={result.total_units_redistributed}
+              unit="units"
+              icon={Package}
+              color="violet"
+              sub="Zero procurement cost"
+              delay={0.1}
+            />
+            <KpiCard
+              label="At-Risk PHCs Addressed"
+              value={result.at_risk_phcs_addressed}
+              unit="facilities"
+              icon={ShieldCheck}
+              color="green"
+              sub="Critical deficit resolved"
+              delay={0.15}
+            />
           </div>
 
-          <div className="card">
-            <h2>Recommended Transfers</h2>
+          {/* Transfer Orders Table */}
+          <div className={`rounded-2xl p-5 ${cardCls}`}>
+            <h3 className={`text-sm font-bold mb-3 ${isDark ? 'text-white' : 'text-slate-800'}`}>
+              Recommended Cross-District Dispatch Orders
+            </h3>
+
             {result.transfers.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">✅</div>
-                <div className="empty-text">No transfers needed</div>
-                <div className="empty-hint">All PHCs are adequately stocked</div>
+              <div className="text-center py-10 text-slate-500 text-xs">
+                ✅ All facilities are adequately stocked. No cross-district transfers required at this time.
               </div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Medicine</th><th>From</th><th></th><th>To</th>
-                    <th>Qty</th><th>Distance</th><th>Risk</th><th>FEFO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.transfers.map((t, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{t.medicine}</td>
-                      <td>
-                        {t.from_phc}
-                        <span style={{ color: 'var(--text-dim)', fontSize: 11 }}> ({t.from_district})</span>
-                      </td>
-                      <td style={{ color: 'var(--accent)', fontSize: 16, textAlign: 'center' }}>→</td>
-                      <td>
-                        {t.to_phc}
-                        <span style={{ color: 'var(--text-dim)', fontSize: 11 }}> ({t.to_district})</span>
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{t.quantity}</td>
-                      <td>{t.distance_km} km</td>
-                      <td>
-                        <span className={`badge ${t.recipient_risk_score > 0.7 ? 'CRITICAL' : t.recipient_risk_score > 0.5 ? 'HIGH' : 'MEDIUM'}`}>
-                          {(t.recipient_risk_score * 100).toFixed(0)}%
-                        </span>
-                      </td>
-                      <td>
-                        {t.fefo_priority ? (
-                          <span style={{ color: 'var(--high)' }}>⏳ Yes</span>
-                        ) : '—'}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className={`border-b ${isDark ? 'border-blue-900/30 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
+                      <th className="text-left py-2.5 pr-4 font-semibold">Medicine</th>
+                      <th className="text-left py-2.5 pr-4 font-semibold">Source Facility (Donor)</th>
+                      <th className="text-center py-2.5 pr-4 font-semibold">Route</th>
+                      <th className="text-left py-2.5 pr-4 font-semibold">Target Facility (Recipient)</th>
+                      <th className="text-right py-2.5 pr-4 font-semibold">Quantity</th>
+                      <th className="text-right py-2.5 pr-4 font-semibold">Distance</th>
+                      <th className="text-right py-2.5 pr-4 font-semibold">Recipient Risk</th>
+                      <th className="text-center py-2.5 font-semibold">FEFO Expiry Flag</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {result.transfers.map((t, i) => (
+                      <tr
+                        key={i}
+                        className={`border-b transition-colors ${isDark ? 'border-blue-900/10 hover:bg-white/5' : 'border-slate-100 hover:bg-slate-50'}`}
+                      >
+                        <td className="py-2.5 pr-4 font-bold text-blue-400">{t.medicine}</td>
+                        <td className="py-2.5 pr-4">
+                          <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{t.from_phc}</div>
+                          <div className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{t.from_district}</div>
+                        </td>
+                        <td className="py-2.5 pr-4 text-center text-blue-400 font-bold">
+                          <ArrowRight size={14} className="inline" />
+                        </td>
+                        <td className="py-2.5 pr-4">
+                          <div className={`font-semibold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{t.to_phc}</div>
+                          <div className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{t.to_district}</div>
+                        </td>
+                        <td className={`py-2.5 pr-4 text-right font-extrabold ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                          {t.quantity} units
+                        </td>
+                        <td className="py-2.5 pr-4 text-right text-slate-400">{t.distance_km} km</td>
+                        <td className="py-2.5 pr-4 text-right">
+                          <span className={`badge ${t.recipient_risk_score > 0.7 ? 'CRITICAL' : t.recipient_risk_score > 0.5 ? 'HIGH' : 'MEDIUM'}`}>
+                            {(t.recipient_risk_score * 100).toFixed(0)}% Risk
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-center">
+                          {t.fefo_priority ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                              <Clock size={10} /> Expiring Soon
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-[10px]">Standard</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
-        </>
+        </motion.div>
       )}
+
     </div>
   )
 }
-=======
-import { useState } from 'react'
-import api from '../services/api.js'
-import AnimatedCounter from '../components/AnimatedCounter.jsx'
-
-export default function ResourceRedistribution() {
-  const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-
-  const run = async () => {
-    setLoading(true); setError(null); setResult(null)
-    try {
-      const res = await api.optimizeRedistribution()
-      setResult(res)
-    } catch (e) {
-      setError(e?.response?.data?.detail || 'Optimization failed.')
-    } finally { setLoading(false) }
-  }
-
-  return (
-    <div className="dashboard-content">
-
-      <div className="card card-accent">
-        <div className="methodology" style={{ marginBottom: 14 }}>
-          Solves a constrained optimization problem: minimize transport cost while prioritizing
-          high-risk recipients. Stock close to expiry (FEFO) gets shipped first to avoid wastage
-          at low-demand PHCs.
-        </div>
-        <button onClick={run} disabled={loading}>
-          {loading ? '⏳ Optimizing...' : '🔄 Generate Redistribution Plan'}
-        </button>
-        {error && <p style={{ color: 'var(--critical)', marginTop: 12, fontSize: 13 }}>{error}</p>}
-      </div>
-
-      {result && (
-        <>
-          <div className="grid grid-3">
-            <div className="card stat">
-              <div className="value"><AnimatedCounter value={result.total_transfer_orders} /></div>
-              <div className="label">Transfer Orders</div>
-            </div>
-            <div className="card stat">
-              <div className="value"><AnimatedCounter value={result.total_units_redistributed} /></div>
-              <div className="label">Units Redistributed</div>
-            </div>
-            <div className="card stat">
-              <div className="value text-low"><AnimatedCounter value={result.at_risk_phcs_addressed} /></div>
-              <div className="label">At-Risk PHCs Addressed</div>
-            </div>
-          </div>
-
-          <div className="card">
-            <h2>Recommended Transfers</h2>
-            {result.transfers.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">✅</div>
-                <div className="empty-text">No transfers needed</div>
-                <div className="empty-hint">All PHCs are adequately stocked</div>
-              </div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Medicine</th><th>From</th><th></th><th>To</th>
-                    <th>Qty</th><th>Distance</th><th>Risk</th><th>FEFO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.transfers.map((t, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{t.medicine}</td>
-                      <td>
-                        {t.from_phc}
-                        <span style={{ color: 'var(--text-dim)', fontSize: 11 }}> ({t.from_district})</span>
-                      </td>
-                      <td style={{ color: 'var(--accent)', fontSize: 16, textAlign: 'center' }}>→</td>
-                      <td>
-                        {t.to_phc}
-                        <span style={{ color: 'var(--text-dim)', fontSize: 11 }}> ({t.to_district})</span>
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{t.quantity}</td>
-                      <td>{t.distance_km} km</td>
-                      <td>
-                        <span className={`badge ${t.recipient_risk_score > 0.7 ? 'CRITICAL' : t.recipient_risk_score > 0.5 ? 'HIGH' : 'MEDIUM'}`}>
-                          {(t.recipient_risk_score * 100).toFixed(0)}%
-                        </span>
-                      </td>
-                      <td>
-                        {t.fefo_priority ? (
-                          <span style={{ color: 'var(--high)' }}>⏳ Yes</span>
-                        ) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
->>>>>>> origin/main
