@@ -18,28 +18,34 @@ const MEDICINES = [
   'Insulin', 'IV Fluids', 'Doxycycline', 'Iron Folic Acid'
 ]
 
+const DEFAULT_PHCS = [
+  { code: 'BEN-PHC01', name: 'Bengaluru Rural Central PHC', district: 'Bengaluru Rural' },
+  { code: 'BEN-PHC02', name: 'Devanahalli PHC', district: 'Bengaluru Rural' },
+  { code: 'BEL-PHC01', name: 'Belagavi North PHC', district: 'Belagavi' },
+  { code: 'KAL-PHC01', name: 'Kalaburagi Main PHC', district: 'Kalaburagi' },
+  { code: 'MYS-PHC01', name: 'Mysuru City PHC', district: 'Mysuru' },
+]
+
 export default function DemandForecast() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
-  const [phcs, setPhcs] = useState([])
-  const [phcId, setPhcId] = useState('')
+  const [phcs, setPhcs] = useState(DEFAULT_PHCS)
+  const [phcId, setPhcId] = useState('BEN-PHC01')
   const [medicine, setMedicine] = useState(MEDICINES[0])
   const [activeH, setActiveH] = useState(7)
   const [results, setResults] = useState({})
   const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
     api.getPHCs()
       .then(data => {
-        setPhcs(data || [])
         if (data && data.length > 0) {
-          setPhcId(data[0].code)
+          setPhcs(data)
+          if (!phcId) setPhcId(data[0].code)
         }
       })
-      .catch(() => setPhcs([]))
-      .finally(() => setInitialLoading(false))
+      .catch(() => {})
   }, [])
 
   const runAll = async () => {
@@ -108,10 +114,6 @@ export default function DemandForecast() {
     }))
     return [...historical, ...forecast]
   })() : []
-
-  if (initialLoading) {
-    return <LoadingSkeleton count={3} />
-  }
 
   return (
     <div className="space-y-5">

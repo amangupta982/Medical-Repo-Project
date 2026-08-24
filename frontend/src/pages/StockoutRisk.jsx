@@ -25,27 +25,33 @@ const RISK_STYLE = {
   LOW:      'bg-green-500/10 text-green-400 border border-green-500/20',
 }
 
+const DEFAULT_PHCS = [
+  { code: 'BEN-PHC01', name: 'Bengaluru Rural Central PHC', district: 'Bengaluru Rural' },
+  { code: 'BEN-PHC02', name: 'Devanahalli PHC', district: 'Bengaluru Rural' },
+  { code: 'BEL-PHC01', name: 'Belagavi North PHC', district: 'Belagavi' },
+  { code: 'KAL-PHC01', name: 'Kalaburagi Main PHC', district: 'Kalaburagi' },
+  { code: 'MYS-PHC01', name: 'Mysuru City PHC', district: 'Mysuru' },
+]
+
 export default function StockoutRisk() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
-  const [phcs, setPhcs] = useState([])
-  const [phcId, setPhcId] = useState('')
+  const [phcs, setPhcs] = useState(DEFAULT_PHCS)
+  const [phcId, setPhcId] = useState('BEN-PHC01')
   const [medicine, setMedicine] = useState(MEDICINES[0])
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
     api.getPHCs()
       .then(data => {
-        setPhcs(data || [])
         if (data && data.length > 0) {
-          setPhcId(data[0].code)
+          setPhcs(data)
+          if (!phcId) setPhcId(data[0].code)
         }
       })
-      .catch(() => setPhcs([]))
-      .finally(() => setInitialLoading(false))
+      .catch(() => {})
   }, [])
 
   const runPrediction = async () => {
@@ -72,10 +78,6 @@ export default function StockoutRisk() {
   const inputCls = isDark
     ? 'bg-[#0d1525] border border-blue-900/30 text-slate-200 focus:border-blue-500'
     : 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-blue-400'
-
-  if (initialLoading) {
-    return <LoadingSkeleton count={3} />
-  }
 
   return (
     <div className="space-y-5">

@@ -23,7 +23,10 @@ def _minmax(s: pd.Series) -> pd.Series:
     return (s - s.min()) / rng * 100
 
 
-def compute_resilience_scores(as_of_date=None) -> pd.DataFrame:
+import functools
+
+@functools.lru_cache(maxsize=8)
+def _compute_cached(as_of_date):
     query = text("""
         SELECT d.name AS district,
                p.code AS phc_id,
@@ -70,3 +73,8 @@ def compute_resilience_scores(as_of_date=None) -> pd.DataFrame:
     scores["weakest_factor"] = scores[list(WEIGHTS.keys())].idxmin(axis=1)
     scores = scores.reset_index().rename(columns={"index": "district"})
     return scores.round(1)
+
+
+def compute_resilience_scores(as_of_date=None) -> pd.DataFrame:
+    df = _compute_cached(as_of_date)
+    return df.copy()
