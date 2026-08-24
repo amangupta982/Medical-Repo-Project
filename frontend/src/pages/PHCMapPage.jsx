@@ -1,327 +1,279 @@
-<<<<<<< HEAD
 import { useEffect, useState, useMemo } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
-import { useTheme } from '../components/ThemeContext.jsx'
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
+import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { Building2, Search, Filter, AlertTriangle, Users, Bed, Stethoscope, MapPin } from 'lucide-react'
+import 'leaflet/dist/leaflet.css'
 import api from '../services/api.js'
-import AnimatedCounter from '../components/AnimatedCounter.jsx'
+import { useTheme } from '../components/ThemeContext.jsx'
+import KpiCard from '../components/KpiCard.jsx'
 import LoadingSkeleton from '../components/LoadingSkeleton.jsx'
+
+// Component to dynamically adjust map center when filtered
+function ChangeView({ center, zoom }) {
+  const map = useMap()
+  useEffect(() => {
+    if (center) map.setView(center, zoom)
+  }, [center, zoom, map])
+  return null
+}
 
 export default function PHCMapPage() {
   const { theme } = useTheme()
+  const isDark = theme === 'dark'
+
   const [phcs, setPhcs] = useState([])
+  const [districts, setDistricts] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Filters
+  const [selectedDistrict, setSelectedDistrict] = useState('all')
+  const [selectedType, setSelectedType] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedPhc, setSelectedPhc] = useState(null)
+
   useEffect(() => {
-    api.getPHCs()
-      .then(data => setPhcs(data || []))
-      .catch(() => setPhcs([]))
+    Promise.all([
+      api.getPHCs().catch(() => []),
+      api.getDistricts().catch(() => []),
+    ])
+      .then(([p, d]) => {
+        setPhcs(p || [])
+        setDistricts(d || [])
+      })
       .finally(() => setLoading(false))
   }, [])
 
-  const remoteCount = useMemo(() => phcs.filter(p => p.is_remote).length, [phcs])
-  const standardCount = useMemo(() => phcs.length - remoteCount, [phcs, remoteCount])
-  const totalCount = phcs.length > 0 ? phcs.length : 29842
-  const displayStandard = phcs.length > 0 ? standardCount : 23714
-  const displayRemote = phcs.length > 0 ? remoteCount : 6128
+  const filteredPhcs = useMemo(() => {
+    return phcs.filter(p => {
+      if (selectedDistrict !== 'all' && p.district !== selectedDistrict) return false
+      if (selectedType === 'remote' && !p.is_remote) return false
+      if (selectedType === 'standard' && p.is_remote) return false
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase()
+        const matchCode = p.code?.toLowerCase().includes(term)
+        const matchName = p.name?.toLowerCase().includes(term)
+        const matchDist = p.district?.toLowerCase().includes(term)
+        if (!matchCode && !matchName && !matchDist) return false
+      }
+      return true
+    })
+  }, [phcs, selectedDistrict, selectedType, searchTerm])
 
-  const center = phcs.length > 0 ? [14.5, 76.2] : [20.5937, 78.9629]
-  const zoom = phcs.length > 0 ? 7 : 5
+  const remoteCount = useMemo(() => filteredPhcs.filter(p => p.is_remote).length, [filteredPhcs])
+  const standardCount = useMemo(() => filteredPhcs.length - remoteCount, [filteredPhcs, remoteCount])
+  const totalBeds = useMemo(() => filteredPhcs.reduce((a, b) => a + (b.total_beds || 0), 0), [filteredPhcs])
 
-  const tileUrl = theme === 'dark'
+  // Center point calculation
+  const mapCenter = useMemo(() => {
+    if (filteredPhcs.length === 0) return [14.5, 76.2] // Karnataka default
+    const valid = filteredPhcs.filter(p => p.lat && p.lon)
+    if (valid.length === 0) return [14.5, 76.2]
+    const latSum = valid.reduce((a, b) => a + b.lat, 0)
+    const lonSum = valid.reduce((a, b) => a + b.lon, 0)
+    return [latSum / valid.length, lonSum / valid.length]
+  }, [filteredPhcs])
+
+  const mapZoom = selectedDistrict !== 'all' ? 9 : 7
+
+  const tileUrl = isDark
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
 
-  if (loading) return <LoadingSkeleton count={1} />
+  const cardCls = isDark
+    ? 'bg-[#111a30] border border-blue-900/20 shadow-sm'
+    : 'bg-white border border-slate-200 shadow-sm'
+
+  const inputCls = isDark
+    ? 'bg-[#0d1525] border border-blue-900/30 text-slate-200 focus:border-blue-500'
+    : 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-blue-400'
+
+  if (loading) {
+    return (
+      <div className="space-y-5">
+        <LoadingSkeleton type="stats" />
+        <div className="h-96 rounded-2xl bg-slate-800 animate-pulse" />
+      </div>
+    )
+  }
 
   return (
-    <div className="dashboard-content">
-      {/* ─── Top 3 KPI Cards ─── */}
-      <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <span className="kpi-card-label">Total PHCs</span>
-            <span className="kpi-card-icon blue">🏥</span>
+    <div className="space-y-5">
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard
+          label="Visible Facilities"
+          value={filteredPhcs.length}
+          unit="PHCs"
+          icon={Building2}
+          color="blue"
+          delay={0.05}
+        />
+        <KpiCard
+          label="Standard Facilities"
+          value={standardCount}
+          unit="PHCs"
+          icon={MapPin}
+          color="green"
+          delay={0.1}
+        />
+        <KpiCard
+          label="Remote / Tribal"
+          value={remoteCount}
+          unit="PHCs"
+          icon={AlertTriangle}
+          color="orange"
+          delay={0.15}
+        />
+        <KpiCard
+          label="Total Inpatient Beds"
+          value={totalBeds}
+          unit="beds"
+          icon={Bed}
+          color="violet"
+          delay={0.2}
+        />
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className={`rounded-2xl p-4 ${cardCls} flex flex-wrap items-center justify-between gap-3`}>
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+          {/* Search Box */}
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search PHC code, name, or district..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl outline-none transition-colors ${inputCls}`}
+            />
           </div>
-          <div className="kpi-value"><AnimatedCounter value={totalCount} /></div>
-          <div className="kpi-trend up">↑ 12.4% vs last month</div>
+
+          {/* District Selector */}
+          <div className="min-w-[150px]">
+            <select
+              value={selectedDistrict}
+              onChange={e => setSelectedDistrict(e.target.value)}
+              className={`w-full px-3 py-2 text-xs rounded-xl outline-none transition-colors ${inputCls}`}
+            >
+              <option value="all">All Districts ({districts.length || 10})</option>
+              {districts.map(d => (
+                <option key={d.id || d.name} value={d.name}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Type Selector */}
+          <div className="min-w-[140px]">
+            <select
+              value={selectedType}
+              onChange={e => setSelectedType(e.target.value)}
+              className={`w-full px-3 py-2 text-xs rounded-xl outline-none transition-colors ${inputCls}`}
+            >
+              <option value="all">All Types</option>
+              <option value="standard">Standard Facilities</option>
+              <option value="remote">Remote / Tribal</option>
+            </select>
+          </div>
         </div>
 
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <span className="kpi-card-label">Standard PHCs</span>
-            <span className="kpi-card-icon purple">👥</span>
+        {/* Legend */}
+        <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-blue-500 inline-block shadow-sm shadow-blue-500/50" />
+            <span className={isDark ? 'text-slate-300' : 'text-slate-600'}>Standard PHC</span>
           </div>
-          <div className="kpi-value"><AnimatedCounter value={displayStandard} /></div>
-          <div className="kpi-trend up">↑ 5.3% vs last month</div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <span className="kpi-card-label">Remote PHCs</span>
-            <span className="kpi-card-icon orange">📡</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-orange-500 inline-block shadow-sm shadow-orange-500/50" />
+            <span className={isDark ? 'text-slate-300' : 'text-slate-600'}>Remote / Tribal</span>
           </div>
-          <div className="kpi-value"><AnimatedCounter value={displayRemote} /></div>
-          <div className="kpi-trend up">↑ 8.7% vs last month</div>
         </div>
       </div>
 
-      {/* ─── Map Card ─── */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div className="card-header" style={{ padding: '16px 22px 14px', borderBottom: '1px solid var(--panel-border)', marginBottom: 0 }}>
-          <div>
-            <div className="card-title">PHC Network Map</div>
-            <div className="card-title-sub">Distribution of standard and remote PHCs across India</div>
-          </div>
-          <button
-            className="filter-btn"
-            onClick={() => window.location.reload()}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <svg viewBox="0 0 24 24" width="13" height="13"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
-            Refresh
-          </button>
-        </div>
-
-        <div style={{ height: '58vh', width: '100%', minHeight: 400, position: 'relative' }}>
-          <MapContainer
-            center={center}
-            zoom={zoom}
-            style={{ height: '100%', width: '100%' }}
-            scrollWheelZoom={true}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-              url={tileUrl}
-            />
-            {phcs.map(p => (
+      {/* Map Container */}
+      <div className={`rounded-2xl p-2 ${cardCls} overflow-hidden shadow-lg h-[540px] relative`}>
+        <MapContainer
+          center={mapCenter}
+          zoom={mapZoom}
+          scrollWheelZoom={true}
+          style={{ height: '100%', width: '100%', borderRadius: '14px' }}
+        >
+          <ChangeView center={mapCenter} zoom={mapZoom} />
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url={tileUrl}
+          />
+          {filteredPhcs.map(p => {
+            if (!p.lat || !p.lon) return null
+            const isRemote = p.is_remote
+            return (
               <CircleMarker
                 key={p.code}
                 center={[p.lat, p.lon]}
-                radius={p.is_remote ? 5 : 6}
+                radius={isRemote ? 7 : 6}
                 pathOptions={{
-                  color: p.is_remote ? '#f97316' : '#3b82f6',
-                  fillColor: p.is_remote ? '#f97316' : '#3b82f6',
-                  fillOpacity: 0.8,
-                  weight: 1.5,
+                  color: isRemote ? '#ea580c' : '#2563eb',
+                  fillColor: isRemote ? '#f97316' : '#3b82f6',
+                  fillOpacity: 0.85,
+                  weight: 2,
+                }}
+                eventHandlers={{
+                  click: () => setSelectedPhc(p),
                 }}
               >
                 <Popup>
-                  <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, lineHeight: 1.6, minWidth: 200, color: '#0f172a' }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{p.code}</div>
-                    <div style={{ color: '#64748b', marginBottom: 8, fontSize: 11 }}>{p.district}, Karnataka</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: 11.5 }}>
-                      <div>🛏️ Beds: <strong>{p.total_beds}</strong></div>
-                      <div>👨‍⚕️ Doctors: <strong>{p.sanctioned_doctors}</strong></div>
-                      <div>👩‍⚕️ Nurses: <strong>{p.sanctioned_nurses}</strong></div>
-                      <div>👥 Catchment: <strong>{p.catchment_population?.toLocaleString()}</strong></div>
+                  <div className="p-1 space-y-2 min-w-[200px] text-xs">
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-700/20 pb-1.5">
+                      <div>
+                        <div className="font-bold text-sm text-blue-400">{p.code}</div>
+                        <div className="font-medium text-slate-200">{p.name || `PHC ${p.code}`}</div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isRemote ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                        {isRemote ? 'Remote' : 'Standard'}
+                      </span>
                     </div>
-                    <div style={{
-                      marginTop: 8,
-                      padding: '4px 8px',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      background: p.is_remote ? 'rgba(249,115,22,0.12)' : 'rgba(34,197,94,0.12)',
-                      color: p.is_remote ? '#ea580c' : '#16a34a',
-                    }}>
-                      {p.is_remote ? '📡 Remote (longer resupply)' : '✅ Standard Access'}
+
+                    <div className="space-y-1 text-slate-300">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">District:</span>
+                        <span className="font-semibold">{p.district}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Total Beds:</span>
+                        <span className="font-semibold">{p.total_beds || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Sanctioned Doctors:</span>
+                        <span className="font-semibold">{p.sanctioned_doctors || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Sanctioned Nurses:</span>
+                        <span className="font-semibold">{p.sanctioned_nurses || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Catchment Pop:</span>
+                        <span className="font-semibold">{(p.catchment_population || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-700/20">
+                      <Link
+                        to={`/stockout`}
+                        className="w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-center block font-semibold transition-colors shadow-sm"
+                      >
+                        Predict Stockout Risk
+                      </Link>
                     </div>
                   </div>
                 </Popup>
               </CircleMarker>
-            ))}
-          </MapContainer>
-        </div>
-
-        {/* Legend */}
-        <div style={{
-          padding: '12px 22px',
-          borderTop: '1px solid var(--panel-border)',
-          display: 'flex',
-          gap: 24,
-          alignItems: 'center',
-          background: 'var(--panel)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />
-            Standard PHC
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f97316', display: 'inline-block' }} />
-            Remote PHC
-          </div>
-        </div>
+            )
+          })}
+        </MapContainer>
       </div>
 
-      {/* Footer */}
-      <div className="dashboard-footer">
-        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="currentColor"/></svg>
-        PHC locations are based on the latest available data. Click on a marker to view PHC details.
-      </div>
     </div>
   )
 }
-=======
-import { useEffect, useState, useMemo } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
-import { useTheme } from '../components/ThemeContext.jsx'
-import api from '../services/api.js'
-import AnimatedCounter from '../components/AnimatedCounter.jsx'
-import LoadingSkeleton from '../components/LoadingSkeleton.jsx'
-
-export default function PHCMapPage() {
-  const { theme } = useTheme()
-  const [phcs, setPhcs] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    api.getPHCs()
-      .then(data => setPhcs(data || []))
-      .catch(() => setPhcs([]))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const remoteCount = useMemo(() => phcs.filter(p => p.is_remote).length, [phcs])
-  const standardCount = useMemo(() => phcs.length - remoteCount, [phcs, remoteCount])
-  const totalCount = phcs.length > 0 ? phcs.length : 29842
-  const displayStandard = phcs.length > 0 ? standardCount : 23714
-  const displayRemote = phcs.length > 0 ? remoteCount : 6128
-
-  const center = phcs.length > 0 ? [14.5, 76.2] : [20.5937, 78.9629]
-  const zoom = phcs.length > 0 ? 7 : 5
-
-  const tileUrl = theme === 'dark'
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
-
-  if (loading) return <LoadingSkeleton count={1} />
-
-  return (
-    <div className="dashboard-content">
-      {/* ─── Top 3 KPI Cards ─── */}
-      <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <span className="kpi-card-label">Total PHCs</span>
-            <span className="kpi-card-icon blue">🏥</span>
-          </div>
-          <div className="kpi-value"><AnimatedCounter value={totalCount} /></div>
-          <div className="kpi-trend up">↑ 12.4% vs last month</div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <span className="kpi-card-label">Standard PHCs</span>
-            <span className="kpi-card-icon purple">👥</span>
-          </div>
-          <div className="kpi-value"><AnimatedCounter value={displayStandard} /></div>
-          <div className="kpi-trend up">↑ 5.3% vs last month</div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-card-header">
-            <span className="kpi-card-label">Remote PHCs</span>
-            <span className="kpi-card-icon orange">📡</span>
-          </div>
-          <div className="kpi-value"><AnimatedCounter value={displayRemote} /></div>
-          <div className="kpi-trend up">↑ 8.7% vs last month</div>
-        </div>
-      </div>
-
-      {/* ─── Map Card ─── */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div className="card-header" style={{ padding: '16px 22px 14px', borderBottom: '1px solid var(--panel-border)', marginBottom: 0 }}>
-          <div>
-            <div className="card-title">PHC Network Map</div>
-            <div className="card-title-sub">Distribution of standard and remote PHCs across India</div>
-          </div>
-          <button
-            className="filter-btn"
-            onClick={() => window.location.reload()}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <svg viewBox="0 0 24 24" width="13" height="13"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/></svg>
-            Refresh
-          </button>
-        </div>
-
-        <div style={{ height: '58vh', width: '100%', minHeight: 400, position: 'relative' }}>
-          <MapContainer
-            center={center}
-            zoom={zoom}
-            style={{ height: '100%', width: '100%' }}
-            scrollWheelZoom={true}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://carto.com/">CartoDB</a>'
-              url={tileUrl}
-            />
-            {phcs.map(p => (
-              <CircleMarker
-                key={p.code}
-                center={[p.lat, p.lon]}
-                radius={p.is_remote ? 5 : 6}
-                pathOptions={{
-                  color: p.is_remote ? '#f97316' : '#3b82f6',
-                  fillColor: p.is_remote ? '#f97316' : '#3b82f6',
-                  fillOpacity: 0.8,
-                  weight: 1.5,
-                }}
-              >
-                <Popup>
-                  <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 12, lineHeight: 1.6, minWidth: 200, color: '#0f172a' }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{p.code}</div>
-                    <div style={{ color: '#64748b', marginBottom: 8, fontSize: 11 }}>{p.district}, Karnataka</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: 11.5 }}>
-                      <div>🛏️ Beds: <strong>{p.total_beds}</strong></div>
-                      <div>👨‍⚕️ Doctors: <strong>{p.sanctioned_doctors}</strong></div>
-                      <div>👩‍⚕️ Nurses: <strong>{p.sanctioned_nurses}</strong></div>
-                      <div>👥 Catchment: <strong>{p.catchment_population?.toLocaleString()}</strong></div>
-                    </div>
-                    <div style={{
-                      marginTop: 8,
-                      padding: '4px 8px',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      background: p.is_remote ? 'rgba(249,115,22,0.12)' : 'rgba(34,197,94,0.12)',
-                      color: p.is_remote ? '#ea580c' : '#16a34a',
-                    }}>
-                      {p.is_remote ? '📡 Remote (longer resupply)' : '✅ Standard Access'}
-                    </div>
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
-          </MapContainer>
-        </div>
-
-        {/* Legend */}
-        <div style={{
-          padding: '12px 22px',
-          borderTop: '1px solid var(--panel-border)',
-          display: 'flex',
-          gap: 24,
-          alignItems: 'center',
-          background: 'var(--panel)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />
-            Standard PHC
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f97316', display: 'inline-block' }} />
-            Remote PHC
-          </div>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="dashboard-footer">
-        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="currentColor"/></svg>
-        PHC locations are based on the latest available data. Click on a marker to view PHC details.
-      </div>
-    </div>
-  )
-}
->>>>>>> origin/main

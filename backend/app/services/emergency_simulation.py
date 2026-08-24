@@ -34,12 +34,12 @@ def _load_champion():
     if row is None:
         raise RuntimeError("No champion stock-out model found.")
     import os
+    artifact_name = row.model_artifact_path.replace('\\', '/').split('/')[-1] if row.model_artifact_path else ('xgb_stockout.json' if row.model_name == 'xgboost' else 'lgb_stockout.txt')
+    local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", artifact_name)
     if row.model_name == "xgboost":
         m = xgb.XGBClassifier()
-        local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(row.model_artifact_path))
         m.load_model(local_path)
         return m, "xgboost"
-    local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", os.path.basename(row.model_artifact_path))
     booster = lgb.Booster(model_file=local_path)
     return booster, "lightgbm"
 

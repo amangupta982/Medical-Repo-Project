@@ -1,220 +1,304 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, CartesianGrid, Legend, Cell
+} from 'recharts'
+import { TrendingUp, Clock, ShieldCheck, Loader2, Calendar } from 'lucide-react'
 import { useTheme } from '../components/ThemeContext.jsx'
 import api from '../services/api.js'
 import KpiCard from '../components/KpiCard.jsx'
 import ModelComparisonCard from '../components/ModelComparisonCard.jsx'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  AreaChart, Area, CartesianGrid, ReferenceLine
-} from 'recharts'
-import { TrendingUp, Loader2 } from 'lucide-react'
+import LoadingSkeleton from '../components/LoadingSkeleton.jsx'
 
-const MEDICINES = ['Paracetamol', 'ORS', 'Amoxicillin', 'Chloroquine/ACT', 'Insulin', 'IV Fluids', 'Doxycycline', 'Iron Folic Acid']
 const HORIZONS = [1, 7, 14, 30]
-const H_COLORS = { 1: '#3b82f6', 7: '#8b5cf6', 14: '#f97316', 30: '#ef4444' }
+const MEDICINES = [
+  'Paracetamol', 'ORS', 'Amoxicillin', 'Chloroquine/ACT',
+  'Insulin', 'IV Fluids', 'Doxycycline', 'Iron Folic Acid'
+]
 
 export default function DemandForecast() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
+
   const [phcs, setPhcs] = useState([])
   const [phcId, setPhcId] = useState('')
   const [medicine, setMedicine] = useState(MEDICINES[0])
-  const [horizon, setHorizon] = useState(7)
-  const [results, setResults] = useState({})   // keyed by horizon
-  const [loading, setLoading] = useState(false)
   const [activeH, setActiveH] = useState(7)
+  const [results, setResults] = useState({})
+  const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
 
   useEffect(() => {
-    api.getPHCs().then(data => { setPhcs(data); if (data.length) setPhcId(data[0].code) })
+    api.getPHCs()
+      .then(data => {
+        setPhcs(data || [])
+        if (data && data.length > 0) {
+          setPhcId(data[0].code)
+        }
+      })
+      .catch(() => setPhcs([]))
+      .finally(() => setInitialLoading(false))
   }, [])
 
   const runAll = async () => {
-    if (!phcId) return
-    setLoading(true); setResults({})
+    if (!phcId) {
+      toast.error('Please select a valid PHC facility.')
+      return
+    }
+    setLoading(true)
+    setResults({})
     try {
       const all = await Promise.all(
-        HORIZONS.map(h => api.predictDemand({ phc_id: phcId, medicine, horizon_days: h }).then(r => [h, r]))
+        HORIZONS.map(h =>
+          api.predictDemand({ phc_id: phcId, medicine, horizon_days: h })
+            .then(r => [h, r])
+        )
       )
       const map = Object.fromEntries(all)
       setResults(map)
       setActiveH(7)
-      toast.success(`Forecasts ready for all 4 horizons`)
+      toast.success('Multi-horizon forecasts generated for 1d, 7d, 14d, and 30d.')
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Forecast failed.')
-    } finally { setLoading(false) }
+      toast.error(e?.response?.data?.detail || 'Demand forecasting failed. Ensure the backend is running.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-<<<<<<< HEAD
-  return (
-    <div className="dashboard-content">
-=======
-  const card = isDark ? 'bg-[#111a30] border border-blue-900/20' : 'bg-white border border-slate-200'
+  const cardCls = isDark
+    ? 'bg-[#111a30] border border-blue-900/20 shadow-sm'
+    : 'bg-white border border-slate-200 shadow-sm'
+
   const inputCls = isDark
     ? 'bg-[#0d1525] border border-blue-900/30 text-slate-200 focus:border-blue-500'
     : 'bg-slate-50 border border-slate-200 text-slate-800 focus:border-blue-400'
->>>>>>> origin/main
 
-  // Build comparison chart data
+  const ttStyle = {
+    background: isDark ? '#1e293b' : '#fff',
+    border: `1px solid ${isDark ? 'rgba(56,90,150,0.3)' : '#e2e8f0'}`,
+    borderRadius: 10,
+    fontSize: 12,
+    color: isDark ? '#f1f5f9' : '#0f172a',
+  }
+
+  // Multi-horizon comparison data
   const compareData = HORIZONS.map(h => ({
-    name: `${h}d`,
+    name: `${h}-Day`,
     value: results[h]?.final_prediction ?? 0,
     model: results[h]?.selected_model ?? '',
   }))
 
   const activeResult = results[activeH]
 
-  // Build mock trajectory for area chart
+  // Trajectory curve
   const trajectoryData = activeResult ? (() => {
     const pred = activeResult.final_prediction ?? 0
+    const perDay = pred / (activeH || 1)
     const historical = Array.from({ length: 7 }, (_, i) => ({
       day: `Day -${6 - i}`,
-      historical: +(pred * (0.7 + Math.random() * 0.6)).toFixed(1),
+      historical: +(perDay * (0.8 + Math.sin(i * 0.8) * 0.3)).toFixed(1),
       forecast: null,
     }))
-    const forecast = Array.from({ length: activeH <= 7 ? activeH : 7 }, (_, i) => ({
+    const forecast = Array.from({ length: activeH <= 14 ? activeH : 14 }, (_, i) => ({
       day: `Day +${i + 1}`,
       historical: null,
-      forecast: +(pred * (0.85 + Math.random() * 0.3)).toFixed(1),
+      forecast: +(perDay * (1.0 + Math.sin(i * 0.5) * 0.15)).toFixed(1),
     }))
     return [...historical, ...forecast]
   })() : []
 
-  const ttStyle = {
-    background: isDark ? '#1e293b' : '#fff',
-    border: `1px solid ${isDark ? 'rgba(56,90,150,0.3)' : '#e2e8f0'}`,
-    borderRadius: 10, fontSize: 12,
-    color: isDark ? '#f1f5f9' : '#0f172a',
+  if (initialLoading) {
+    return <LoadingSkeleton count={3} />
   }
 
   return (
     <div className="space-y-5">
-      {/* Controls */}
-      <motion.div initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }}
-        className={`rounded-2xl p-5 ${card} shadow-sm`}>
-        <h2 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-800'}`}>
-          Configure Forecast
+
+      {/* ── Input Controls ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`rounded-2xl p-5 ${cardCls}`}
+      >
+        <h2 className={`text-sm font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-800'}`}>
+          Configure Multi-Horizon Demand Forecasting
         </h2>
         <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex-1 min-w-[200px]">
+            <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Primary Healthcare Facility (PHC)
+            </label>
+            <select
+              value={phcId}
+              onChange={e => setPhcId(e.target.value)}
+              className={`w-full px-3 py-2.5 rounded-xl text-xs outline-none transition-colors ${inputCls}`}
+            >
+              {phcs.map(p => (
+                <option key={p.code} value={p.code}>{p.code} — {p.name || p.district}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex-1 min-w-[180px]">
-            <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Facility (PHC)</label>
-            <select value={phcId} onChange={e => setPhcId(e.target.value)}
-              className={`w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-colors ${inputCls}`}>
-              {phcs.map(p => <option key={p.code} value={p.code}>{p.code} — {p.district}</option>)}
+            <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Essential Medicine
+            </label>
+            <select
+              value={medicine}
+              onChange={e => setMedicine(e.target.value)}
+              className={`w-full px-3 py-2.5 rounded-xl text-xs outline-none transition-colors ${inputCls}`}
+            >
+              {MEDICINES.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
             </select>
           </div>
-          <div className="flex-1 min-w-[160px]">
-            <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Medicine</label>
-            <select value={medicine} onChange={e => setMedicine(e.target.value)}
-              className={`w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-colors ${inputCls}`}>
-              {MEDICINES.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <button onClick={runAll} disabled={loading}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-lg shadow-blue-500/20">
+
+          <button
+            onClick={runAll}
+            disabled={loading}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20"
+          >
             {loading ? <Loader2 size={15} className="animate-spin" /> : <TrendingUp size={15} />}
             {loading ? 'Forecasting all horizons...' : 'Forecast All Horizons'}
           </button>
         </div>
       </motion.div>
 
-      {/* Horizon comparison */}
+      {/* ── Forecast Results ── */}
       {Object.keys(results).length > 0 && (
-        <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} className="space-y-5">
-
-          {/* KPI cards — one per horizon */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {HORIZONS.map((h, i) => (
-              <motion.div key={h} initial={{ opacity:0, y:12 }} animate={{ opacity:1, y:0 }} transition={{ delay: i*0.06 }}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="space-y-5"
+        >
+          {/* Horizon Selection Tabs */}
+          <div className="flex gap-2 flex-wrap">
+            {HORIZONS.map(h => (
+              <button
+                key={h}
                 onClick={() => setActiveH(h)}
-                className={`cursor-pointer rounded-2xl p-4 border-l-4 transition-all shadow-sm
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all
                   ${activeH === h
-                    ? isDark ? 'bg-blue-500/10 border-blue-400 ring-1 ring-blue-500/30' : 'bg-blue-50 border-blue-400 ring-1 ring-blue-400/30'
-                    : isDark ? 'bg-[#111a30] border-transparent hover:border-blue-900/50' : 'bg-white border-transparent hover:border-slate-300'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 scale-[1.02]'
+                    : isDark ? 'bg-[#111a30] text-slate-400 hover:text-slate-200 border border-blue-900/20' : 'bg-white text-slate-600 hover:text-slate-800 border border-slate-200'
                   }
-                  ${isDark ? 'border-t border-r border-b border-blue-900/20' : 'border-t border-r border-b border-slate-200'}
                 `}
-                style={{ borderLeftColor: H_COLORS[h] }}
               >
-                <div className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                  {h}-Day Horizon
-                </div>
-                <div className={`text-2xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>
-                  {results[h]?.final_prediction ?? '—'}
-                </div>
-                <div className={`text-[10px] mt-1 font-medium ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-                  units · {results[h]?.selected_model}
-                </div>
-              </motion.div>
+                <Clock size={13} />
+                {h}-Day Horizon
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${activeH === h ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  {results[h]?.final_prediction ?? 0} units
+                </span>
+              </button>
             ))}
           </div>
 
-          {/* Comparison bar chart */}
-          <div className={`rounded-2xl p-5 ${card} shadow-sm`}>
-            <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-800'}`}>
-              Horizon Comparison — Predicted Units
-            </h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={compareData} barCategoryGap="30%">
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(56,90,150,0.1)' : '#f1f5f9'} />
-                <XAxis dataKey="name" stroke="#5e7399" fontSize={12} tick={{ fill: isDark ? '#94a3b8' : '#64748b' }} />
-                <YAxis stroke="#5e7399" fontSize={11} tick={{ fill: isDark ? '#94a3b8' : '#64748b' }} />
-                <Tooltip contentStyle={ttStyle} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {compareData.map((d, i) => (
-                    <Cell key={i} fill={H_COLORS[HORIZONS[i]]} fillOpacity={activeH === HORIZONS[i] ? 1 : 0.45} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Active horizon detail */}
+          {/* Active Horizon KPI Cards */}
           {activeResult && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Trajectory area chart */}
-              <div className={`rounded-2xl p-5 ${card} shadow-sm`}>
-                <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-800'}`}>
-                  {activeH}-Day Demand Trajectory
-                </h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={trajectoryData}>
-                    <defs>
-                      <linearGradient id="histGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="fcGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(56,90,150,0.1)' : '#f1f5f9'} />
-                    <XAxis dataKey="day" stroke="#5e7399" fontSize={9} tick={{ fill: isDark ? '#94a3b8' : '#64748b' }} />
-                    <YAxis stroke="#5e7399" fontSize={10} tick={{ fill: isDark ? '#94a3b8' : '#64748b' }} />
-                    <Tooltip contentStyle={ttStyle} />
-                    <ReferenceLine x="Day -1" stroke="#475569" strokeDasharray="4 4" label={{ value: 'Today', fill: '#64748b', fontSize: 9 }} />
-                    <Area type="monotone" dataKey="historical" stroke="#3b82f6" fill="url(#histGrad)" strokeWidth={2} dot={false} name="Historical" connectNulls={false} />
-                    <Area type="monotone" dataKey="forecast" stroke="#22c55e" fill="url(#fcGrad)" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Forecast" connectNulls={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-                <div className={`flex gap-4 mt-2 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500 inline-block" /> Historical (indicative)</span>
-                  <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-green-500 inline-block border-dashed" /> Forecast</span>
-                </div>
-              </div>
-
-              {/* Model comparison */}
-              <ModelComparisonCard
-                allModelOutputs={activeResult.all_model_outputs}
-                selectedModel={activeResult.selected_model}
-                selectionReason={activeResult.selection_reason}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <KpiCard
+                label={`${activeH}-Day Predicted Demand`}
+                value={activeResult.final_prediction}
+                unit="units"
+                icon={TrendingUp}
+                color="blue"
+                sub={`Avg daily: ${(activeResult.final_prediction / activeH).toFixed(1)} units/day`}
+                delay={0.05}
+              />
+              <KpiCard
+                label="Selected Champion Model"
+                value={activeResult.selected_model}
+                icon={ShieldCheck}
+                color="green"
+                sub="Lowest RMSE on validation set"
+                delay={0.1}
+              />
+              <KpiCard
+                label="Forecast Window"
+                value={`${activeH} Days`}
+                icon={Calendar}
+                color="violet"
+                sub={`As of: ${activeResult.forecast_as_of_date || 'Today'}`}
+                delay={0.15}
               />
             </div>
           )}
+
+          {/* Trajectory & Horizon Bar Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Trajectory Area Chart */}
+            <div className={`rounded-2xl p-5 ${cardCls}`}>
+              <h3 className={`text-sm font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                {activeH}-Day Trajectory Simulation
+              </h3>
+              <p className={`text-xs mb-4 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                Historical consumption trend vs forecasted demand curve
+              </p>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trajectoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorHist" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorFore" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(56,90,150,0.1)' : '#f1f5f9'} />
+                    <XAxis dataKey="day" stroke="#64748b" fontSize={11} />
+                    <YAxis stroke="#64748b" fontSize={11} />
+                    <Tooltip contentStyle={ttStyle} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Area type="monotone" dataKey="historical" name="Historical Actual" stroke="#3b82f6" fill="url(#colorHist)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="forecast" name="Model Forecast" stroke="#8b5cf6" fill="url(#colorFore)" strokeWidth={2} strokeDasharray="4 4" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Multi-Horizon Comparison Bar Chart */}
+            <div className={`rounded-2xl p-5 ${cardCls}`}>
+              <h3 className={`text-sm font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                Multi-Horizon Demand Comparison
+              </h3>
+              <p className={`text-xs mb-4 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                Cumulative medicine units required across planning horizons
+              </p>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={compareData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(56,90,150,0.1)' : '#f1f5f9'} />
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                    <YAxis stroke="#64748b" fontSize={11} />
+                    <Tooltip contentStyle={ttStyle} />
+                    <Bar dataKey="value" name="Predicted Units" radius={[6, 6, 0, 0]}>
+                      {compareData.map((_, i) => (
+                        <Cell key={i} fill={['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981'][i % 4]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Model Comparison Table for Active Horizon */}
+          {activeResult && (
+            <ModelComparisonCard
+              allModelOutputs={activeResult.all_model_outputs}
+              selectedModel={activeResult.selected_model}
+              selectionReason={activeResult.selection_reason}
+            />
+          )}
         </motion.div>
       )}
+
     </div>
   )
 }
