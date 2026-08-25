@@ -7,15 +7,20 @@ SAME trained champion models (no retraining -- this is a stress-test of the
 existing model, which is both faster and methodologically correct: we want
 to know how the current system responds, not fit a new model to the scenario),
 and returns before/after risk comparisons.
+
+Production notes:
+- Uses ModelRegistry for cached champion model (no per-request DB lookup + file load)
+- Uses injected DB session instead of creating its own SessionLocal
+- Structured logging for simulation parameters and results
 """
 import numpy as np
 import pandas as pd
-import xgboost as xgb
-import lightgbm as lgb
 
-from app.database.session import SessionLocal
-from app.models.db_models import ModelPerformance
+from app.services.model_registry import model_registry
 from app.ml.preprocessing.features import FEATURE_COLS
+from app.core.logging import get_logger
+
+logger = get_logger("services.simulation")
 
 PRESETS = {
     "dengue_outbreak": {"patients_mult": 1.8, "consumption_mult_disease_linked": 2.2, "outbreak_flag": 1},
@@ -24,24 +29,16 @@ PRESETS = {
 }
 
 
-def _load_champion():
-    db = SessionLocal()
-    row = db.query(ModelPerformance).filter(
-        ModelPerformance.task == "stockout_classification",
-        ModelPerformance.is_current_champion == True,
-    ).first()
-    db.close()
-    if row is None:
-        raise RuntimeError("No champion stock-out model found.")
-    import os
-    artifact_name = row.model_artifact_path.replace('\\', '/').split('/')[-1] if row.model_artifact_path else ('xgb_stockout.json' if row.model_name == 'xgboost' else 'lgb_stockout.txt')
-    local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", artifact_name)
-    if row.model_name == "xgboost":
-        m = xgb.XGBClassifier()
-        m.load_model(local_path)
-        return m, "xgboost"
-    booster = lgb.Booster(model_file=local_path)
-    return booster, "lightgbm"
+def _load_champion(db=None):
+    """Load the champion stockout model via the model registry."""
+    if db is None:
+        from app.database.session import SessionLocal
+        db = SessionLocal()
+        try:
+            return model_registry.get_stockout_champion(db)
+        finally:
+            db.close()
+    return model_registry.get_stockout_champion(db)
 
 
 def _predict(model, model_type, X):
@@ -59,6 +56,7 @@ def apply_scenario(features_df: pd.DataFrame, scenario: str = None,
 
     if scenario and scenario in PRESETS:
         p = PRESETS[scenario]
+        logger.info("Applying preset scenario: %s (patients_mult=%.1f)", scenario, p["patients_mult"])
         df["patients"] = df["patients"] * p["patients_mult"]
         df["patients_ma7"] = df["patients_ma7"] * p["patients_mult"]
         df["patients_ma14"] = df["patients_ma14"] * p["patients_mult"]
@@ -71,6 +69,7 @@ def apply_scenario(features_df: pd.DataFrame, scenario: str = None,
 
     if patient_increase_pct:
         mult = 1 + patient_increase_pct / 100
+        logger.info("Applying patient increase: +%.1f%% (mult=%.2f)", patient_increase_pct, mult)
         df["patients"] *= mult
         df["patients_ma7"] *= mult
         df["patients_ma14"] *= mult
@@ -80,6 +79,7 @@ def apply_scenario(features_df: pd.DataFrame, scenario: str = None,
         df["days_of_stock_left"] = df["days_of_stock_left"].fillna(df["current_stock"])
 
     if supply_disruption_pct:
+        logger.info("Applying supply disruption: +%.1f%% lead time", supply_disruption_pct)
         # simulate a lead-time blowout (supplier delay), which raises effective risk
         df["lead_time_days"] *= (1 + supply_disruption_pct / 100)
 
@@ -112,4 +112,11 @@ def run_simulation(features_df: pd.DataFrame, scenario: str = None,
         "max_risk_after": round(float(after_prob.max()), 4),
         "top_impacted": result.sort_values("risk_delta", ascending=False).head(10).to_dict(orient="records"),
     }
+
+    logger.info(
+        "Simulation complete: scenario=%s, avg_risk %.4f→%.4f, newly_critical=%d",
+        scenario or "custom", summary["avg_risk_before"], summary["avg_risk_after"],
+        summary["phcs_newly_critical"],
+    )
+
     return summary
