@@ -18,6 +18,7 @@ report: local-only performance vs FedAvg-aggregated performance.
 """
 import os
 import numpy as np
+from flwr.common import Context
 import pandas as pd
 import warnings
 warnings.filterwarnings("ignore")
