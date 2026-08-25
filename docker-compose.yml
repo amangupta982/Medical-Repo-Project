@@ -26,18 +26,30 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-brics_dev_pw}@db:5432/${POSTGRES_DB:-brics_health}
-      CORS_ORIGINS: http://localhost:5173
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      LOG_LEVEL: INFO
+      DEBUG: "false"
+      DB_POOL_SIZE: "10"
+      DB_MAX_OVERFLOW: "20"
+      MODEL_CACHE_TTL_SECONDS: "300"
     ports:
       - "8000:8000"
     volumes:
       - ./models:/app/../models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build: ./frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     environment:
       VITE_API_BASE_URL: http://localhost:8000
     ports:
