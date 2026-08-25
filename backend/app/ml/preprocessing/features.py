@@ -18,7 +18,7 @@ def load_panel() -> pd.DataFrame:
             st.doctors_present, st.nurses_present,
             p.sanctioned_doctors, p.sanctioned_nurses,
             p.is_remote,
-            COALESCE(dc.outbreak_active, 0) AS outbreak_active
+            COALESCE(dc.outbreak_active, FALSE) AS outbreak_active
         FROM medicine_consumption mc
         JOIN phcs p ON p.id = mc.phc_id
         JOIN districts d ON d.id = p.district_id
