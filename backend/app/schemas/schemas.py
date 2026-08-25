@@ -1,7 +1,62 @@
+"""
+Pydantic schemas for request/response validation.
+
+Production notes:
+- All schemas use `model_config` (Pydantic v2) instead of inner `Config` class.
+- Added pagination support, error response schema, and health check models.
+"""
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Generic, TypeVar
 from datetime import date, datetime
 
+
+# ── Pagination ───────────────────────────────────────────────────────────
+
+T = TypeVar("T")
+
+
+class PaginationMeta(BaseModel):
+    """Pagination metadata included in paginated responses."""
+    total: int
+    skip: int
+    limit: int
+    has_more: bool
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Wrapper for paginated list endpoints."""
+    data: List[Any]
+    pagination: PaginationMeta
+
+
+# ── Error Responses ──────────────────────────────────────────────────────
+
+class ErrorDetail(BaseModel):
+    """Structured error response body."""
+    code: str
+    message: str
+    details: Dict[str, Any] = {}
+    correlation_id: str = ""
+
+
+class ErrorResponse(BaseModel):
+    """Top-level error envelope."""
+    error: ErrorDetail
+
+
+# ── Health Checks ────────────────────────────────────────────────────────
+
+class HealthResponse(BaseModel):
+    status: str
+
+
+class ReadinessResponse(BaseModel):
+    status: str
+    database: Dict[str, Any]
+    models: Dict[str, Any]
+
+
+# ── Network / PHC / District ────────────────────────────────────────────
 
 class PHCOut(BaseModel):
     code: str
@@ -14,18 +69,18 @@ class PHCOut(BaseModel):
     is_remote: bool
     lat: float
     lon: float
-    class Config:
-        from_attributes = True
+
+    model_config = {"from_attributes": True}
 
 
 class DistrictOut(BaseModel):
     name: str
     state: str
     capacity_factor: float
-    lat: Optional[float]
-    lon: Optional[float]
-    class Config:
-        from_attributes = True
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+    model_config = {"from_attributes": True}
 
 
 class InventoryOut(BaseModel):
@@ -39,15 +94,26 @@ class InventoryOut(BaseModel):
 class AlertOut(BaseModel):
     id: int
     created_at: datetime
-    phc_id: Optional[str]
-    district_id: Optional[str]
+    phc_id: Optional[str] = None
+    district_id: Optional[str] = None
     alert_type: str
     severity: str
     message: str
     resolved: bool
-    class Config:
-        from_attributes = True
 
+    model_config = {"from_attributes": True}
+
+
+class OverviewStatsOut(BaseModel):
+    """Aggregated dashboard stats."""
+    total_phcs: int
+    total_districts: int
+    remote_phcs: int
+    total_catchment_population: int
+    avg_beds_per_phc: float
+
+
+# ── Predictions ──────────────────────────────────────────────────────────
 
 class DemandPredictRequest(BaseModel):
     phc_id: str
@@ -87,7 +153,7 @@ class StockoutPredictResponse(BaseModel):
     medicine: str
     current_stock: int
     predicted_demand_per_day: float
-    expected_stockout_days: Optional[float]
+    expected_stockout_days: Optional[float] = None
     stockout_probability: float
     risk_level: str
     selected_model: str
@@ -104,11 +170,38 @@ class BedForecastResponse(BaseModel):
     risk_level: str
 
 
+# ── Emergency Simulation ────────────────────────────────────────────────
+
 class EmergencySimulateRequest(BaseModel):
     scenario: Optional[str] = None  # "dengue_outbreak" | "flu_surge" | "gi_outbreak" | None
     patient_increase_pct: float = 0.0
     supply_disruption_pct: float = 0.0
 
+
+class ImpactedPHC(BaseModel):
+    """Single PHC entry in the simulation impact list."""
+    phc_id: Optional[str] = None
+    district: Optional[str] = None
+    medicine: Optional[str] = None
+    risk_before: float
+    risk_after: float
+    risk_delta: float
+
+
+class EmergencySimulateResponse(BaseModel):
+    """Response for emergency simulation endpoint."""
+    scenario: str
+    patient_increase_pct: float
+    supply_disruption_pct: float
+    avg_risk_before: float
+    avg_risk_after: float
+    phcs_newly_critical: int
+    max_risk_before: float
+    max_risk_after: float
+    top_impacted: List[ImpactedPHC]
+
+
+# ── Redistribution ──────────────────────────────────────────────────────
 
 class RedistributionTransfer(BaseModel):
     medicine: str
@@ -130,6 +223,8 @@ class RedistributionResponse(BaseModel):
     transfers: List[RedistributionTransfer]
 
 
+# ── Resilience Score ─────────────────────────────────────────────────────
+
 class ResilienceScoreOut(BaseModel):
     district: str
     rank: int
@@ -141,9 +236,13 @@ class ResilienceScoreOut(BaseModel):
     weakest_factor: str
 
 
+# ── Federated Learning ──────────────────────────────────────────────────
+
 class FederatedTrainRequest(BaseModel):
     rounds: int = Field(default=5, ge=1, le=20)
 
+
+# ── Model Performance ───────────────────────────────────────────────────
 
 class ModelPerformanceOut(BaseModel):
     task: str
@@ -151,5 +250,17 @@ class ModelPerformanceOut(BaseModel):
     metrics: Dict[str, Any]
     is_current_champion: bool
     trained_at: datetime
-    class Config:
-        from_attributes = True
+
+    model_config = {"from_attributes": True}
+
+
+# ── Explainability ──────────────────────────────────────────────────────
+
+class ExplainabilityResponse(BaseModel):
+    prediction_id: int
+    prediction_type: Optional[str] = None
+    selected_model: Optional[str] = None
+    final_prediction: Optional[float] = None
+    risk_level: Optional[str] = None
+    explanation: Optional[Dict[str, Any]] = None
+    all_model_outputs: Optional[List[Dict[str, Any]]] = None
