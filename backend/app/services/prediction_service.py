@@ -11,6 +11,10 @@ Instead, at request time we:
   3. Pull each model's STORED held-out validation metrics (from training time)
      to decide which model is trusted as champion -- selection is based on
      validation performance, not on which prediction looks most convenient.
+
+Production notes:
+  - Uses ModelRegistry for cached model loading (avoids ~200ms disk reads per request)
+  - Structured logging for auditability
 """
 import os
 import numpy as np
@@ -22,6 +26,12 @@ from sqlalchemy.orm import Session
 from app.models.db_models import ModelPerformance, Prediction, PHC, Medicine
 from app.ml.preprocessing.features import load_panel, compute_stockout_labels, build_features, FEATURE_COLS
 from app.ml.explainability.shap_service import explain_row
+from app.services.model_registry import model_registry
+from app.core.config import get_settings
+from app.core.logging import get_logger
+
+logger = get_logger("services.prediction")
+settings = get_settings()
 
 RISK_THRESHOLDS = [(0.85, "CRITICAL"), (0.6, "HIGH"), (0.3, "MEDIUM"), (0.0, "LOW")]
 
@@ -44,6 +54,8 @@ def _get_feature_row(phc_id: str, medicine: str):
 
 
 def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
+    logger.info("Running stockout prediction: phc=%s, medicine=%s", phc_id, medicine)
+
     row, _ = _get_feature_row(phc_id, medicine)
     X = pd.DataFrame([[float(row[c]) for c in FEATURE_COLS]], columns=FEATURE_COLS)
 
@@ -53,6 +65,8 @@ def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
 
     all_outputs = []
     champion_row = None
+    models_dir = settings.models_directory
+
     for pr in perf_rows:
         if pr.model_name == "baseline":
             prob = 1.0 if row["days_of_stock_left"] < row["lead_time_days"] * 1.3 else 0.0
@@ -61,12 +75,12 @@ def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
         elif pr.model_name == "xgboost":
             m = xgb.XGBClassifier()
             artifact_name = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else "xgb_stockout.json"
-            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", artifact_name)
+            local_path = os.path.join(models_dir, artifact_name)
             m.load_model(local_path)
             prob = float(m.predict_proba(X)[:, 1][0])
         elif pr.model_name == "lightgbm":
             artifact_name = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else "lgb_stockout.txt"
-            local_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained", artifact_name)
+            local_path = os.path.join(models_dir, artifact_name)
             booster = lgb.Booster(model_file=local_path)
             prob = float(booster.predict(X)[0])
         else:
@@ -98,6 +112,11 @@ def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
 
     expected_days = row["days_of_stock_left"] if row["consumption_ma7"] > 0 else None
 
+    logger.info(
+        "Stockout prediction complete: phc=%s, medicine=%s, risk=%s, prob=%.4f, model=%s",
+        phc_id, medicine, risk_level_for(champion_prob), champion_prob, champion_row.model_name,
+    )
+
     return {
         "phc_id": phc_id, "medicine": medicine,
         "current_stock": int(row["current_stock"]),
@@ -115,6 +134,11 @@ def predict_stockout(db: Session, phc_id: str, medicine: str) -> dict:
 
 
 def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 1) -> dict:
+    logger.info(
+        "Running demand prediction: phc=%s, medicine=%s, horizon=%dd",
+        phc_id, medicine, horizon_days,
+    )
+
     row, _ = _get_feature_row(phc_id, medicine)
     X = pd.DataFrame([[float(row[c]) for c in FEATURE_COLS]], columns=FEATURE_COLS)
 
@@ -133,7 +157,7 @@ def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 
     all_outputs = []
     champion_row = None
     champion_pred = None
-    models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "models", "trained"))
+    models_dir = settings.models_directory
 
     for pr in perf_rows:
         if pr.model_name == "naive_lag1":
@@ -141,20 +165,30 @@ def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 
         elif pr.model_name == "moving_average_7d":
             pred = float(row["consumption_ma7"]) * mapped_horizon
         elif pr.model_name == "xgboost":
-            m = xgb.XGBRegressor()
-            artifact_file = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else f"xgb_demand_{mapped_horizon}d.json"
-            local_path = os.path.join(models_dir, artifact_file)
-            if not os.path.exists(local_path):
-                local_path = os.path.join(models_dir, "xgb_demand.json")
-            m.load_model(local_path)
-            pred = float(max(0, m.predict(X)[0]))
+            try:
+                m, _ = model_registry.get_demand_model(db, "xgboost", mapped_horizon)
+                pred = float(max(0, m.predict(X)[0]))
+            except Exception:
+                # Fallback to direct load
+                m = xgb.XGBRegressor()
+                artifact_file = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else f"xgb_demand_{mapped_horizon}d.json"
+                local_path = os.path.join(models_dir, artifact_file)
+                if not os.path.exists(local_path):
+                    local_path = os.path.join(models_dir, "xgb_demand.json")
+                m.load_model(local_path)
+                pred = float(max(0, m.predict(X)[0]))
         elif pr.model_name == "lightgbm":
-            artifact_file = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else f"lgb_demand_{mapped_horizon}d.txt"
-            local_path = os.path.join(models_dir, artifact_file)
-            if not os.path.exists(local_path):
-                local_path = os.path.join(models_dir, "lgb_demand.txt")
-            booster = lgb.Booster(model_file=local_path)
-            pred = float(max(0, booster.predict(X)[0]))
+            try:
+                booster, _ = model_registry.get_demand_model(db, "lightgbm", mapped_horizon)
+                pred = float(max(0, booster.predict(X)[0]))
+            except Exception:
+                # Fallback to direct load
+                artifact_file = pr.model_artifact_path.replace('\\', '/').split('/')[-1] if pr.model_artifact_path else f"lgb_demand_{mapped_horizon}d.txt"
+                local_path = os.path.join(models_dir, artifact_file)
+                if not os.path.exists(local_path):
+                    local_path = os.path.join(models_dir, "lgb_demand.txt")
+                booster = lgb.Booster(model_file=local_path)
+                pred = float(max(0, booster.predict(X)[0]))
         elif pr.model_name == "lstm":
             # LSTM requires a 14-day sequential sliding window tensor reconstruction at request time.
             # To preserve sub-50ms API responsiveness for interactive dashboards, LSTM is evaluated as
@@ -197,6 +231,12 @@ def predict_demand(db: Session, phc_id: str, medicine: str, horizon_days: int = 
     db.add(pred_log)
     db.commit()
     db.refresh(pred_log)
+
+    logger.info(
+        "Demand prediction complete: phc=%s, medicine=%s, horizon=%dd, model=%s, prediction=%.2f",
+        phc_id, medicine, horizon_days, champion_row.model_name,
+        final_pred if final_pred is not None else 0,
+    )
 
     return {
         "phc_id": phc_id,
