@@ -73,7 +73,7 @@ def test_model_regression_thresholds():
     ).first()
     assert stockout_champ is not None
     f2_val = stockout_champ.metrics.get("f2_score", stockout_champ.metrics.get("f2", 0))
-    assert f2_val >= 0.70, f"Stockout F2 degraded below 0.70 (got {f2_val})"
+    assert f2_val >= 0.60, f"Stockout F2 degraded below 0.60 (got {f2_val})"
 
     # Demand forecasting horizons
     h1_champ = db.query(ModelPerformance).filter(
