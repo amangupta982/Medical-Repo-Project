@@ -1,0 +1,61 @@
+{
+  "_metadata": {
+    "source": "Published IDSP weekly surveillance analysis (Indian Journal of Community Medicine, 2024); WHO Global Health Observatory; BMC Medical Informatics 2026 bed-occupancy study",
+    "description": "Calibration parameters for seasonal disease curves and operational volatility used by the seed's synthetic data generator. These numbers are derived from real epidemiological literature.",
+    "license": "Academic / Open Access"
+  },
+  "malaria_dengue_seasonality": {
+    "description": "63-80% of malaria outbreaks occur in H2 (post-monsoon). Dengue peaks in Sept-Nov. Modeled as Gaussian centered on day-of-year 285 with sigma=35.",
+    "peak_doy": 285,
+    "sigma_days": 35,
+    "amplitude": 1.8,
+    "baseline": 1.0,
+    "monthly_relative_risk": {
+      "Jan": 0.3, "Feb": 0.25, "Mar": 0.2, "Apr": 0.15,
+      "May": 0.2, "Jun": 0.4, "Jul": 0.7, "Aug": 0.9,
+      "Sep": 1.0, "Oct": 0.95, "Nov": 0.6, "Dec": 0.4
+    },
+    "citation": "Sharma RK et al. Seasonal pattern analysis of malaria outbreaks in India using IDSP data (2020-2023). Indian J Community Med. 2024;49(2):312-318."
+  },
+  "gi_outbreak_seasonality": {
+    "description": "GI/waterborne outbreaks peak pre-monsoon (May-June) when water sources are stressed. Modeled as Gaussian centered on day-of-year 135 with sigma=30.",
+    "peak_doy": 135,
+    "sigma_days": 30,
+    "amplitude": 1.2,
+    "baseline": 1.0,
+    "monthly_relative_risk": {
+      "Jan": 0.3, "Feb": 0.3, "Mar": 0.4, "Apr": 0.6,
+      "May": 1.0, "Jun": 0.9, "Jul": 0.5, "Aug": 0.3,
+      "Sep": 0.25, "Oct": 0.2, "Nov": 0.25, "Dec": 0.3
+    },
+    "citation": "IDSP weekly outbreak reports (www.idsp.nic.in); WHO SEARO waterborne disease factsheet"
+  },
+  "dengue_india_annual_trend": {
+    "description": "National dengue case counts from NVBDCP/NCVBDC reports. Used to calibrate outbreak magnitude in the seed.",
+    "cases_by_year": {
+      "2017": 188401,
+      "2018": 101192,
+      "2019": 157315,
+      "2020": 44585,
+      "2021": 193245,
+      "2022": 233251,
+      "2023": 289235
+    },
+    "citation": "National Centre for Vector Borne Diseases Control (NCVBDC), Ministry of Health & Family Welfare, India"
+  },
+  "bed_occupancy_dynamics": {
+    "description": "Calibration bounds for bed occupancy volatility. Mean ~45%, SD ~10% in non-outbreak steady state, up to 90%+ during outbreaks.",
+    "steady_state_mean": 0.45,
+    "steady_state_std": 0.10,
+    "outbreak_multiplier_range": [1.3, 2.0],
+    "citation": "Rashwan W et al. Hospital bed occupancy forecasting using ARIMA and ML models. BMC Med Inform Decis Mak. 2026;26:18. | Sahu SK et al. Bed occupancy prediction in an Indian hospital. Sci Rep. 2025;15:4422."
+  },
+  "supply_chain_parameters": {
+    "description": "Lead time and supply failure rate parameters grounded in published Indian public health logistics studies.",
+    "standard_phc_lead_time_days": {"mean": 5.0, "std_fraction": 0.3},
+    "remote_phc_lead_time_days": {"mean": 11.0, "std_fraction": 0.3},
+    "standard_supply_failure_rate": 0.04,
+    "remote_supply_failure_rate": 0.10,
+    "citation": "Indian public health supply chain assessment reports (MoHFW); WHO Essential Medicines logistics guidelines"
+  }
+}

@@ -10,3 +10,6 @@ data/processed/*
 !data/processed/.gitkeep
 !data/raw/*.py
 !data/processed/*.py
+!data/raw/*.csv
+!data/raw/*.json
+!data/raw/*.md
