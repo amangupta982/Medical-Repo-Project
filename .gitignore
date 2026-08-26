@@ -8,3 +8,5 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+!data/raw/*.py
+!data/processed/*.py
