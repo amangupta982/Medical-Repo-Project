@@ -184,13 +184,6 @@ def list_alerts(
 @router.get("/stats/overview", response_model=OverviewStatsOut)
 def overview_stats(db: Session = Depends(get_db)):
     """Aggregated stats for the dashboard Overview — single efficient query."""
-    result = db.query(
-        func.count(PHC.id).label("total_phcs"),
-        func.sum(PHC.catchment_population).label("total_pop"),
-        func.avg(PHC.total_beds).label("avg_beds"),
-        func.sum(func.cast(PHC.is_remote, type_=db.bind.dialect.type_descriptor(type(1)) if False else None)).label("remote"),
-    ).first()
-
     # Simpler fallback: two queries instead of complex cast
     phcs = db.query(PHC).all()
     district_count = db.query(func.count(District.id)).scalar()

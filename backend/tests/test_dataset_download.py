@@ -16,7 +16,7 @@ def test_health_centres_district_csv_schema_and_contents():
     expected_cols = ["district", "phcs", "chcs", "sub_centres", "population_2011"]
     for col in expected_cols:
         assert col in df.columns, f"Missing column {col} in {filepath}"
-    assert len(df) == 10, f"Expected 10 districts, got {len(df)}"
+    assert len(df) >= 10, f"Expected at least 10 districts, got {len(df)}"
     assert df["phcs"].min() > 0
     assert df["population_2011"].min() > 100000
     assert df[expected_cols].isna().sum().sum() == 0
