@@ -150,6 +150,7 @@ GET  /api/explainability/{prediction_id}
 
 ## 11. Testing
 
+**Backend:**
 ```bash
 cd backend
 pytest tests/ -v
@@ -157,6 +158,13 @@ pytest tests/ -v
 Covers feature-engineering leakage checks, risk-level threshold logic, and
 live API integration tests (health, PHC listing, prediction error handling,
 emergency simulation before/after sanity check).
+
+**Frontend:**
+```bash
+cd frontend
+npm run test
+```
+Tests core UI components (like `StatusBadge` and `AnimatedCounter`) using Vitest and React Testing Library.
 
 ## 12. Limitations (stated honestly)
 
