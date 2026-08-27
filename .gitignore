@@ -13,3 +13,5 @@ data/processed/*
 !data/raw/*.csv
 !data/raw/*.json
 !data/raw/*.md
+frontend/dist/
+frontend/.env.local
