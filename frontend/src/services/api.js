@@ -24,15 +24,15 @@ function cachedGet(url, params = null, ttlMs = 60000) {
 
 export const api = {
   // Cached endpoints for instant page switches
-  getPHCs: () => cachedGet('/api/phcs', null, 300000), // 5 min cache
-  getDistricts: () => cachedGet('/api/districts', null, 300000),
+  getPHCs: () => cachedGet('/api/phcs', null, 300000).then(r => r.data ?? r), // 5 min cache
+  getDistricts: () => cachedGet('/api/districts', null, 300000).then(r => r.data ?? r),
   getStatsOverview: () => cachedGet('/api/stats/overview', null, 30000), // 30s cache
   getResilienceScores: () => cachedGet('/api/resilience-score', null, 60000),
   getModelPerformance: (task) => cachedGet('/api/models/performance', task ? { task } : {}, 120000),
 
   // Live endpoints
-  getInventory: (params) => client.get('/api/inventory', { params }).then(r => r.data),
-  getAlerts: (params) => cachedGet('/api/alerts', params, 10000), // 10s cache
+  getInventory: (params) => client.get('/api/inventory', { params }).then(r => r.data.data ?? r.data),
+  getAlerts: (params) => cachedGet('/api/alerts', params, 10000).then(r => r.data ?? r), // 10s cache
   checkHealth: () => client.get('/health', { timeout: 3000 }).then(r => r.data),
 
   // Mutation / AI Execution Endpoints
